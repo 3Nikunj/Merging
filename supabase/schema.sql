@@ -249,6 +249,25 @@ create table if not exists public.weak_areas (
     created_at timestamptz not null default now()
 );
 
+-- Coding Arena Submissions
+create table if not exists public.coding_submissions (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references public.profiles(id) on delete cascade,
+    problem_id text not null,
+    language text not null default 'python3',
+    code text not null,
+    status text not null check (status in ('accepted', 'wrong_answer', 'runtime_error', 'compile_error', 'timeout')),
+    tests_passed integer not null default 0,
+    total_tests integer not null default 0,
+    stdout text,
+    stderr text,
+    submitted_at timestamptz not null default now()
+);
+
+create index if not exists idx_coding_submissions_user_id on public.coding_submissions(user_id);
+create index if not exists idx_coding_submissions_problem_id on public.coding_submissions(problem_id);
+create index if not exists idx_coding_submissions_status on public.coding_submissions(status);
+
 -- Reporting View
 create or replace view public.reporting_user_test_latest as
 select distinct on (ta.user_id, ta.test_id)

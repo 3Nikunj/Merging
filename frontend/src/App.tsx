@@ -10,7 +10,6 @@ import Unauthorized from "./pages/shared/Unauthorized";
 import CodingArenaPage from "./pages/student/CodingArena/CodingArenaPage";
 import LiveTestPage from "./pages/student/LiveTest/LiveTestPage";
 import PlaceholderPage from "./pages/student/PlaceholderPage";
-import PracticeTestsPage from "./pages/student/PracticeTests/PracticeTestsPage";
 import ResultsPage from "./pages/student/Results/ResultsPage";
 import TestInstructionsPage from "./pages/student/TestInstructions/TestInstructionsPage";
 import TestSelectionPage from "./pages/student/TestSelection/TestSelectionPage";
@@ -40,7 +39,7 @@ function App() {
 
       {/* Student Guarded Routes */}
       <Route element={<RouteGuard allowedRoles={["student"]} />}>
-        <Route path="/practice-tests" element={<PracticeTestsPage />} />
+        <Route path="/practice-tests" element={<TestSelectionPage />} />
         <Route path="/practice-tests/selection" element={<TestSelectionPage />} />
         <Route path="/practice-tests/instructions" element={<TestInstructionsPage />} />
         <Route path="/practice-tests/live" element={<LiveTestPage />} />

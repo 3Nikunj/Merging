@@ -97,6 +97,96 @@ class PracticeTestService:
             selected_test=TestSummary.model_validate(SELECTED_TEST),
         )
 
+    def get_subjects(self) -> list[dict]:
+        client = get_supabase_client()
+        if client:
+            try:
+                subjects = client.table("subjects").select("*").order("sort_order").execute().data or []
+                tests = client.table("tests").select("id,subject_id").eq("is_active", True).execute().data or []
+                question_counts = self._test_question_counts()
+                
+                subject_counts: dict[str, int] = {}
+                for test in tests:
+                    count = question_counts.get(str(test["id"]), 0)
+                    sid = test.get("subject_id")
+                    if sid:
+                        key = str(sid)
+                        subject_counts[key] = subject_counts.get(key, 0) + count
+
+                return [
+                    self._map_selection_item(item, subject_counts.get(str(item["id"]), 0))
+                    for item in subjects
+                ]
+            except Exception:
+                pass
+        return [self._map_selection_item(item, 0) for item in SUBJECTS]
+
+    def get_topics(self, subject_id: str | None = None) -> list[dict]:
+        client = get_supabase_client()
+        if client:
+            try:
+                query = client.table("topics").select("*").order("sort_order")
+                if subject_id:
+                    query = query.eq("subject_id", subject_id)
+                topics = query.execute().data or []
+                
+                test_query = client.table("tests").select("id,topic_id").eq("is_active", True)
+                if subject_id:
+                    test_query = test_query.eq("subject_id", subject_id)
+                tests = test_query.execute().data or []
+                question_counts = self._test_question_counts()
+                
+                topic_counts: dict[str, int] = {}
+                for test in tests:
+                    count = question_counts.get(str(test["id"]), 0)
+                    tid = test.get("topic_id")
+                    if tid:
+                        key = str(tid)
+                        topic_counts[key] = topic_counts.get(key, 0) + count
+
+                return [
+                    self._map_selection_item(item, topic_counts.get(str(item["id"]), 0))
+                    for item in topics
+                ]
+            except Exception:
+                pass
+        return [
+            self._map_selection_item(item, 0)
+            for item in TOPICS
+            if not subject_id or str(item.get("subject_id")) == subject_id
+        ]
+
+    def get_subtopics(self, topic_id: str | None = None) -> list[dict]:
+        client = get_supabase_client()
+        if client:
+            try:
+                query = client.table("subtopics").select("*").order("sort_order")
+                if topic_id:
+                    query = query.eq("topic_id", topic_id)
+                subtopics = query.execute().data or []
+                
+                q_query = client.table("questions").select("id,subtopic_id").eq("status", "published")
+                questions = q_query.execute().data or []
+                subtopic_counts: dict[str, int] = {}
+                for q in questions:
+                    sub_id = q.get("subtopic_id")
+                    if sub_id:
+                        key = str(sub_id)
+                        subtopic_counts[key] = subtopic_counts.get(key, 0) + 1
+
+                return [
+                    self._map_selection_item(item, subtopic_counts.get(str(item["id"]), 0))
+                    for item in subtopics
+                ]
+            except Exception:
+                pass
+        return [
+            self._map_selection_item(item, 0)
+            for item in SUBTOPICS
+            if not topic_id or str(item.get("topic_id")) == topic_id
+        ]
+
+
     def _test_question_counts(self) -> dict[str, int]:
         client = get_supabase_client()
         if not client:

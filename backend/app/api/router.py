@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routes import attempts, health, hierarchy, practice_tests, recommendations
+from app.api.routes import attempts, coding, health, hierarchy, practice_tests, recommendations
 from app.auth.dependency import require_role
 
 api_router = APIRouter()
@@ -26,6 +26,12 @@ api_router.include_router(
     recommendations.router,
     prefix="/users",
     tags=["recommendations"],
+    dependencies=[Depends(require_role(["student", "admin"]))]
+)
+api_router.include_router(
+    coding.router,
+    prefix="/coding",
+    tags=["coding"],
     dependencies=[Depends(require_role(["student", "admin"]))]
 )
 

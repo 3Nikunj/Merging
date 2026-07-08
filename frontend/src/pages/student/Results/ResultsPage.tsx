@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import MetricCard from "../../../components/student/testFlow/MetricCard";
-import PracticeShell from "../../../components/student/testFlow/PracticeShell";
+import AppLayout from "../../../components/student/layout/AppLayout";
 import StatusBadge from "../../../components/student/testFlow/StatusBadge";
 import { answerReview, resultBreakdown, selectedTest } from "../../../data/testFlow";
 import { api, type AttemptResultResponse } from "../../../services/api";
@@ -31,7 +31,7 @@ function ResultsPage() {
   }, [attemptId]);
 
   return (
-    <PracticeShell title="Performance Dashboard" compact>
+    <AppLayout>
       <main className="mx-auto max-w-[1280px]">
         <section className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
@@ -49,18 +49,18 @@ function ResultsPage() {
           <div className="flex gap-3">
             <Link
               to="/practice-tests/instructions"
-              className="rounded-lg border-2 border-practice-ink px-5 py-3 text-sm font-extrabold text-practice-ink transition hover:bg-practice-muted"
+              className="rounded-lg border-2 border-practice-ink px-5 py-3 text-sm font-extrabold text-practice-ink transition-all duration-200 hover:bg-practice-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-background"
             >
               Retry Test
             </Link>
-            <button className="rounded-lg bg-practice-amberDark px-5 py-3 text-sm font-extrabold text-white transition hover:bg-practice-ink">
+            <button className="rounded-lg bg-practice-amberDark px-5 py-3 text-sm font-extrabold text-white transition-all duration-200 hover:bg-practice-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-background">
               Download Result
             </button>
           </div>
         </section>
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
-          <div className="rounded-lg border border-practice-line bg-white p-6 text-center shadow-dashboard">
+          <div className="rounded-lg border border-practice-line bg-white p-6 text-center shadow-dashboard transition-all duration-300 hover:shadow-lg">
             <div
               className="mx-auto flex h-32 w-32 items-center justify-center rounded-full"
               style={{
@@ -71,7 +71,7 @@ function ResultsPage() {
                 <span className="text-3xl font-extrabold text-practice-ink">
                   {result.overallScore}%
                 </span>
-                <span className="text-sm text-practice-subdued">Overall</span>
+                <span className="text-sm text-[#2d2f34]">Overall</span>
               </div>
             </div>
             <p className="mt-4 text-xl font-bold text-practice-amberDark">
@@ -79,22 +79,22 @@ function ResultsPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border border-practice-line bg-white p-6 shadow-dashboard">
-            <p className="mb-4 text-xs font-extrabold uppercase tracking-wider text-practice-subdued">
+          <div className="rounded-lg border border-practice-line bg-white p-6 shadow-dashboard transition-all duration-300 hover:shadow-lg">
+            <p className="mb-4 text-xs font-extrabold uppercase tracking-wider text-[#2d2f34]">
               Question Stats
             </p>
-            <div className="space-y-3">
+            <div className="space-y-3 text-sm font-medium">
               <div className="flex justify-between">
                 <span>Correct</span>
-                <span className="font-extrabold">{result.correct}</span>
+                <span className="font-extrabold text-emerald-700">{result.correct}</span>
               </div>
               <div className="flex justify-between">
                 <span>Incorrect</span>
-                <span className="font-extrabold">{result.incorrect}</span>
+                <span className="font-extrabold text-rose-700">{result.incorrect}</span>
               </div>
               <div className="flex justify-between">
                 <span>Skipped</span>
-                <span className="font-extrabold">{result.skipped}</span>
+                <span className="font-extrabold text-practice-subdued">{result.skipped}</span>
               </div>
             </div>
           </div>
@@ -126,7 +126,7 @@ function ResultsPage() {
             </div>
 
             <div className="mt-10 border-t border-practice-line pt-8">
-              <h3 className="mb-4 text-xs font-extrabold uppercase tracking-widest text-practice-subdued">
+              <h3 className="mb-4 text-xs font-extrabold uppercase tracking-widest text-[#2d2f34]">
                 Weak Areas
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -134,7 +134,7 @@ function ResultsPage() {
                   (area) => (
                     <span
                       key={area}
-                      className="rounded-full bg-practice-muted px-4 py-2 text-sm font-bold text-practice-subdued"
+                      className="rounded-full bg-practice-muted px-4 py-2 text-sm font-bold text-[#2d2f34]"
                     >
                       {area}
                     </span>
@@ -149,13 +149,13 @@ function ResultsPage() {
             {["LCM & HCF Masterclass", "Modular Arithmetic"].map((title) => (
               <div
                 key={title}
-                className="rounded-lg border border-practice-line bg-white p-6 shadow-dashboard transition hover:border-practice-amberDark"
+                className="rounded-lg border border-practice-line bg-white p-6 shadow-dashboard transition-all duration-300 ease-out hover:-translate-y-1 hover:border-practice-amber hover:shadow-lg"
               >
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded bg-practice-amber/30 font-extrabold text-practice-amberDark">
                   R
                 </div>
-                <h3 className="mb-2 text-xl font-bold">{title}</h3>
-                <p className="mb-4 text-sm text-practice-subdued">
+                <h3 className="mb-2 text-xl font-bold text-practice-ink">{title}</h3>
+                <p className="mb-4 text-sm text-[#2d2f34]">
                   Continue strengthening foundations with focused practice and shortcuts.
                 </p>
                 <span className="text-xs font-extrabold uppercase text-practice-amberDark">
@@ -169,7 +169,7 @@ function ResultsPage() {
         <section className="overflow-hidden rounded-lg border border-practice-line bg-white shadow-dashboard">
           <div className="flex items-center justify-between border-b border-practice-line px-6 py-5">
             <h2 className="text-xl font-bold text-practice-ink">Answer Review</h2>
-            <select className="rounded-lg border border-practice-line px-3 py-2 text-sm">
+            <select className="rounded-lg border border-practice-line px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber">
               <option>All Questions</option>
               <option>Incorrect Only</option>
               <option>Skipped Only</option>
@@ -177,7 +177,7 @@ function ResultsPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-practice-muted text-xs uppercase tracking-wider text-practice-subdued">
+              <thead className="bg-practice-muted text-xs uppercase tracking-wider text-[#2d2f34]">
                 <tr>
                   <th className="px-6 py-4">Q.No</th>
                   <th className="px-6 py-4">Question Preview</th>
@@ -196,7 +196,7 @@ function ResultsPage() {
                     </td>
                     <td className="px-6 py-5">{row.topic}</td>
                     <td className="px-6 py-5">
-                      <button className="font-extrabold text-practice-amberDark hover:underline">
+                      <button className="font-extrabold text-practice-amberDark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber rounded px-1">
                         View Explanation
                       </button>
                     </td>
@@ -206,11 +206,11 @@ function ResultsPage() {
             </table>
           </div>
           <div className="bg-practice-muted px-6 py-4 text-center">
-            <button className="font-extrabold text-practice-ink">Show More Questions</button>
+            <button className="font-extrabold text-practice-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber rounded px-2 py-1">Show More Questions</button>
           </div>
         </section>
       </main>
-    </PracticeShell>
+    </AppLayout>
   );
 }
 

@@ -31,7 +31,7 @@ function getButtonText(status: PracticeTestCardData["status"]) {
 
 function PremiumCard() {
   return (
-    <article className="flex min-h-[230px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-practice-line bg-white/35 p-6 text-center opacity-75 transition hover:opacity-100">
+    <article className="flex min-h-[230px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-practice-line bg-white/35 p-6 text-center opacity-75 transition-all duration-300 hover:opacity-100 hover:border-practice-amber hover:-translate-y-1 hover:shadow-dashboard">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-practice-line text-3xl text-practice-subdued">
         lock
       </div>
@@ -39,7 +39,7 @@ function PremiumCard() {
       <p className="mb-6 mt-2 text-sm text-practice-subdued">
         Unlock 50+ advanced company mock tests
       </p>
-      <button className="rounded bg-practice-amberDark px-6 py-2.5 text-sm font-extrabold text-white transition hover:bg-practice-ink">
+      <button className="rounded bg-practice-amberDark px-6 py-2.5 text-sm font-extrabold text-white transition-all duration-200 hover:bg-practice-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-white">
         Upgrade Now
       </button>
     </article>
@@ -52,7 +52,7 @@ function PracticeTestCard({ test }: PracticeTestCardProps) {
   }
 
   return (
-    <article className="group flex min-h-[230px] flex-col overflow-hidden rounded-lg border border-practice-line bg-white shadow-dashboard transition hover:-translate-y-0.5 hover:border-practice-amber">
+    <article className="group flex min-h-[230px] flex-col overflow-hidden rounded-lg border border-practice-line bg-white shadow-dashboard transition-all duration-300 ease-out hover:-translate-y-1 hover:border-practice-amber hover:shadow-lg">
       <div className="flex-1 p-4 sm:p-5">
         <div className="mb-4 flex items-start justify-between gap-3">
           <span className="rounded-full bg-practice-muted px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-practice-subdued">
@@ -72,17 +72,17 @@ function PracticeTestCard({ test }: PracticeTestCardProps) {
           {test.title}
         </h3>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-practice-subdued">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-[#2d2f34]">
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black">Q</span>
+            <span className="text-xs font-black text-practice-subdued">Q</span>
             {test.questions} Qs
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black">M</span>
+            <span className="text-xs font-black text-practice-subdued">M</span>
             {test.duration} Mins
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black">L</span>
+            <span className="text-xs font-black text-practice-subdued">L</span>
             <span className={difficultyClasses[test.difficulty]}>{test.difficulty}</span>
           </span>
         </div>
@@ -97,7 +97,8 @@ function PracticeTestCard({ test }: PracticeTestCardProps) {
                 ? "/practice-tests/live"
                 : "/practice-tests/selection"
           }
-          className="block w-full rounded bg-practice-ink py-3 text-center text-sm font-extrabold text-white transition hover:bg-practice-sidebarActive active:scale-[0.99]"
+          state={{ testId: test.id, title: test.title, category: test.category }}
+          className="block w-full rounded bg-practice-ink py-3 text-center text-sm font-extrabold text-white transition-all duration-200 hover:bg-practice-sidebarActive active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-white"
         >
           {getButtonText(test.status)}
         </Link>

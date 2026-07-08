@@ -61,6 +61,14 @@ export interface AttemptResultResponse {
   answerReview: AnswerReviewRow[];
 }
 
+export interface RunCodeResponse {
+  status: "ACCEPTED" | "WRONG_ANSWER" | "RUNTIME_ERROR" | "COMPILE_ERROR" | "TIMEOUT" | "NO_TESTS";
+  stdout: string;
+  stderr: string;
+  testsPassed: number;
+  totalTests: number;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -87,6 +95,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 // Student Portal Specific Methods
 api.getPracticeTests = () => api<PracticeTestsResponse>("/api/practice-tests");
 api.getSelectionData = () => api<SelectionDataResponse>("/api/practice-tests/selection-data");
+api.getSubjects = () => api<{ subjects: SelectionItem[] }>("/api/practice-tests/subjects");
+api.getTopics = (subjectId?: string) =>
+  api<{ topics: SelectionItem[] }>(
+    subjectId ? `/api/practice-tests/topics?subject_id=${subjectId}` : "/api/practice-tests/topics"
+  );
+api.getSubtopics = (topicId?: string) =>
+  api<{ subtopics: SelectionItem[] }>(
+    topicId ? `/api/practice-tests/subtopics?topic_id=${topicId}` : "/api/practice-tests/subtopics"
+  );
 
 api.getRecommendations = (userId: string) =>
   api<{ recommendations: Recommendation[] }>(`/api/users/${userId}/recommendations`);
@@ -94,17 +111,21 @@ api.getRecommendations = (userId: string) =>
 api.getWeakAreas = (userId: string) =>
   api<{ weakAreas: WeakArea[] }>(`/api/users/${userId}/weak-areas`);
 
-api.startAttempt = () => {
-  // dynamic check if auth user is logged in
+api.startAttempt = (
+  testId: string,
+  subjectId: string,
+  topicId: string,
+  subtopicId: string
+) => {
   return supabase.auth.getUser().then(({ data: { user } }) => {
     return api<TestAttempt>("/api/test-attempts", {
       method: "POST",
       body: JSON.stringify({
         userId: user?.id || "demo-user",
-        testId: "prime-factors",
-        subjectId: "quant",
-        topicId: "number-systems",
-        subtopicId: "prime-factors",
+        testId,
+        subjectId,
+        topicId,
+        subtopicId,
       }),
     });
   });
@@ -136,3 +157,33 @@ api.submitAttempt = (attemptId: string) =>
 
 api.getAttemptResult = (attemptId: string) =>
   api<AttemptResultResponse>(`/api/test-attempts/${attemptId}/result`);
+
+api.runCode = (problemId: string, code: string) =>
+  api<RunCodeResponse>("/api/coding/run", {
+    method: "POST",
+    body: JSON.stringify({ problemId, code }),
+  });
+
+api.submitCode = (problemId: string, code: string, userId: string) =>
+  api<RunCodeResponse & { submissionId: string | null }>("/api/coding/submit", {
+    method: "POST",
+    body: JSON.stringify({ problemId, code, userId }),
+  });
+
+api.getCodingSubmissions = (userId: string, problemId?: string) =>
+  api<{
+    submissions: Array<{
+      id: string;
+      problem_id: string;
+      language: string;
+      code: string;
+      status: string;
+      tests_passed: number;
+      total_tests: number;
+      submitted_at: string;
+      stdout: string | null;
+      stderr: string | null;
+    }>;
+  }>(
+    `/api/coding/submissions/${userId}${problemId ? `?problem_id=${problemId}` : ""}`
+  );

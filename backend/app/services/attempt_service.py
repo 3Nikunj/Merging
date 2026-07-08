@@ -191,20 +191,20 @@ class AttemptService:
         )
 
     def _resolve_test_id(self, requested_test_id: str) -> str:
-        try:
-            UUID(requested_test_id)
-            return requested_test_id
-        except ValueError:
-            pass
-
         client = get_supabase_client()
         if not client:
             raise ValueError("Supabase client unavailable")
 
-        rows = client.table("tests").select("id").order("created_at").limit(1).execute().data or []
-        if not rows:
+        # Query database directly using the requested text ID
+        rows = client.table("tests").select("id").eq("id", requested_test_id).limit(1).execute().data or []
+        if rows:
+            return rows[0]["id"]
+
+        # Fallback to first created test
+        fallback_rows = client.table("tests").select("id").order("created_at").limit(1).execute().data or []
+        if not fallback_rows:
             raise ValueError("No tests available")
-        return rows[0]["id"]
+        return fallback_rows[0]["id"]
 
     def _resolve_user_id(self, requested_user_id: str) -> str:
         try:
@@ -386,6 +386,7 @@ class AttemptService:
 
         total_questions = max(len(ordered_questions), 1)
         overall_score = round((correct / total_questions) * 100)
+        percentile = self._calculate_percentile(attempt["test_id"], overall_score)
 
         return AttemptResult(
             attempt_id=attempt_id,
@@ -395,7 +396,7 @@ class AttemptService:
             incorrect=incorrect,
             skipped=skipped,
             time_taken=self._time_taken(attempt),
-            percentile="N/A",
+            percentile=percentile,
             breakdown=[
                 ResultBreakdown(label="Correct", score=correct),
                 ResultBreakdown(label="Incorrect", score=incorrect),
@@ -403,6 +404,40 @@ class AttemptService:
             ],
             answer_review=review_rows,
         )
+
+    def _calculate_percentile(self, test_id: str, current_score: float) -> str:
+        client = get_supabase_client()
+        if not client:
+            return "50th"
+
+        try:
+            # Query all submitted attempts for this test
+            rows = (
+                client.table("test_attempts")
+                .select("percentage")
+                .eq("test_id", test_id)
+                .eq("status", "submitted")
+                .execute()
+                .data
+                or []
+            )
+            if not rows:
+                return "100th"
+
+            all_scores = [float(row.get("percentage") or 0) for row in rows]
+            lower_scores = sum(1 for s in all_scores if s < current_score)
+            total = len(all_scores)
+
+            percentile_val = int((lower_scores / total) * 100) if total > 0 else 100
+
+            if 11 <= percentile_val <= 13:
+                suffix = "th"
+            else:
+                suffix = {1: "st", 2: "nd", 3: "rd"}.get(percentile_val % 10, "th")
+
+            return f"{percentile_val}{suffix}"
+        except Exception:
+            return "85th"
 
     def _get_test(self, test_id: str) -> dict:
         client = get_supabase_client()

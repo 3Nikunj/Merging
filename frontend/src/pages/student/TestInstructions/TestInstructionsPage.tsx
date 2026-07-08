@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import MetricCard from "../../../components/student/testFlow/MetricCard";
-import PracticeShell from "../../../components/student/testFlow/PracticeShell";
+import AppLayout from "../../../components/student/layout/AppLayout";
 import { selectedTest } from "../../../data/testFlow";
 import { api } from "../../../services/api";
 import type { TestSummary } from "../../../types/testFlow";
@@ -15,6 +15,15 @@ const checklist = [
 
 function TestInstructionsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as {
+    testId: string;
+    subjectId: string;
+    topicId: string;
+    subtopicId: string;
+    subtopicTitle?: string;
+  } | null;
+
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
   const [showWarning, setShowWarning] = useState(false);
   const [test, setTest] = useState<TestSummary>(selectedTest);
@@ -31,11 +40,34 @@ function TestInstructionsPage() {
   };
 
   useEffect(() => {
-    api
-      .getSelectionData()
-      .then((data) => setTest(data.selectedTest))
-      .catch(() => setTest(selectedTest));
-  }, []);
+    if (state?.testId) {
+      api.getPracticeTests()
+        .then((response) => {
+          const matched = response.tests.find((t) => t.id === state.testId);
+          if (matched) {
+            setTest({
+              subject: state.subjectId || matched.category,
+              topic: state.topicId || "General",
+              subtopic: state.subtopicTitle || state.subtopicId || "General",
+              title: matched.title,
+              questions: matched.questions,
+              duration: matched.duration,
+              totalMarks: matched.questions * 4,
+              difficulty: matched.difficulty,
+              passingScore: "50%",
+              attemptsAllowed: 3,
+              bestScore: matched.status === "Completed" ? "78%" : "N/A",
+            });
+          }
+        })
+        .catch(() => undefined);
+    } else {
+      api
+        .getSelectionData()
+        .then((data) => setTest(data.selectedTest))
+        .catch(() => setTest(selectedTest));
+    }
+  }, [state]);
 
   const handleStart = async () => {
     if (!allChecked) {
@@ -44,7 +76,12 @@ function TestInstructionsPage() {
     }
 
     try {
-      const attempt = await api.startAttempt();
+      const attempt = await api.startAttempt(
+        state?.testId ?? "prime-factors",
+        state?.subjectId ?? "quant",
+        state?.topicId ?? "number-systems",
+        state?.subtopicId ?? "prime-factors"
+      );
       navigate(`/practice-tests/live?attemptId=${attempt.id}`);
     } catch {
       navigate("/practice-tests/live");
@@ -52,7 +89,7 @@ function TestInstructionsPage() {
   };
 
   return (
-    <PracticeShell title="Test Instructions">
+    <AppLayout>
       <div className="mx-auto grid max-w-[1280px] gap-8 lg:grid-cols-[1fr_340px]">
         <section className="overflow-hidden rounded-lg border border-practice-line bg-white shadow-dashboard">
           <div className="p-6 sm:p-8">
@@ -197,7 +234,7 @@ function TestInstructionsPage() {
           </button>
         </div>
       </footer>
-    </PracticeShell>
+    </AppLayout>
   );
 }
 

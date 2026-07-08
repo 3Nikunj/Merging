@@ -18,14 +18,14 @@ def get_selection_data() -> SelectionDataResponse:
 
 @router.get("/subjects")
 def list_subjects() -> dict:
-    return {"subjects": practice_test_service.get_selection_data().subjects}
+    return {"subjects": practice_test_service.get_subjects()}
 
 
 @router.get("/topics")
 def list_topics(subject_id: str | None = None) -> dict:
     return {
         "subjectId": subject_id,
-        "topics": practice_test_service.get_selection_data().topics,
+        "topics": practice_test_service.get_topics(subject_id),
     }
 
 
@@ -33,5 +33,5 @@ def list_topics(subject_id: str | None = None) -> dict:
 def list_subtopics(topic_id: str | None = None) -> dict:
     return {
         "topicId": topic_id,
-        "subtopics": practice_test_service.get_selection_data().subtopics,
+        "subtopics": practice_test_service.get_subtopics(topic_id),
     }
