@@ -6,18 +6,14 @@ from app.core.config import get_settings
 
 
 @lru_cache
-def get_supabase_client() -> Client | None:
+def get_supabase_client() -> Client:
     settings = get_settings()
-
-    if not settings.supabase_enabled:
-        return None
-
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return create_client(
+        settings.supabase_url,
+        settings.supabase_service_role_key.get_secret_value(),
+    )
 
 
 def get_supabase_admin() -> Client:
-    client = get_supabase_client()
-    if not client:
-        raise ValueError("Supabase URL and Service Role Key must be set for Admin access.")
-    return client
+    return get_supabase_client()
 

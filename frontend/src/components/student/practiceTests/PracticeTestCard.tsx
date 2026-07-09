@@ -1,4 +1,5 @@
 import type { PracticeTestCardData } from "../../../types/practiceTest";
+import { Clock3, FileQuestion, Gauge, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface PracticeTestCardProps {
@@ -32,8 +33,8 @@ function getButtonText(status: PracticeTestCardData["status"]) {
 function PremiumCard() {
   return (
     <article className="flex min-h-[230px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-practice-line bg-white/35 p-6 text-center opacity-75 transition-all duration-300 hover:opacity-100 hover:border-practice-amber hover:-translate-y-1 hover:shadow-dashboard">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-practice-line text-3xl text-practice-subdued">
-        lock
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded border border-practice-line text-practice-subdued">
+        <LockKeyhole className="h-6 w-6" aria-hidden="true" />
       </div>
       <h3 className="text-xl font-bold text-practice-subdued">Premium Tests</h3>
       <p className="mb-6 mt-2 text-sm text-practice-subdued">
@@ -74,15 +75,15 @@ function PracticeTestCard({ test }: PracticeTestCardProps) {
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-[#2d2f34]">
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black text-practice-subdued">Q</span>
+            <FileQuestion className="h-4 w-4 text-practice-subdued" aria-hidden="true" />
             {test.questions} Qs
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black text-practice-subdued">M</span>
+            <Clock3 className="h-4 w-4 text-practice-subdued" aria-hidden="true" />
             {test.duration} Mins
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="text-xs font-black text-practice-subdued">L</span>
+            <Gauge className="h-4 w-4 text-practice-subdued" aria-hidden="true" />
             <span className={difficultyClasses[test.difficulty]}>{test.difficulty}</span>
           </span>
         </div>

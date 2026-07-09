@@ -12,5 +12,5 @@ def health_check() -> dict[str, str | bool]:
     return {
         "status": "ok",
         "environment": settings.app_env,
-        "supabaseEnabled": settings.supabase_enabled,
+        "supabaseEnabled": True,
     }

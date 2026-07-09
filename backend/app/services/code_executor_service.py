@@ -1,155 +1,224 @@
-"""
-code_executor_service.py — Secure sandboxed Python code execution.
-Runs user-submitted code in an isolated subprocess with a strict CPU timeout.
-"""
+"""Isolated execution client and coding-submission persistence."""
+
 from __future__ import annotations
 
-import subprocess
-import sys
+import json
+import secrets
+from typing import Literal, TypedDict
 
+import httpx
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from app.core.config import get_settings
 from app.core.supabase import get_supabase_client
 
-# Hidden test cases per problem (problemId → list of (args, expected_output))
-PROBLEM_TESTS: dict[str, list[dict]] = {
+PROBLEM_TESTS: dict[str, list[dict[str, str]]] = {
     "001": [
-        {
-            "call": "Solution().twoSum([2,7,11,15], 9)",
-            "expected": "[0, 1]",
-        },
-        {
-            "call": "Solution().twoSum([3,2,4], 6)",
-            "expected": "[1, 2]",
-        },
-        {
-            "call": "Solution().twoSum([3,3], 6)",
-            "expected": "[0, 1]",
-        },
+        {"call": "Solution().twoSum([2,7,11,15], 9)", "expected": "[0, 1]"},
+        {"call": "Solution().twoSum([3,2,4], 6)", "expected": "[1, 2]"},
+        {"call": "Solution().twoSum([3,3], 6)", "expected": "[0, 1]"},
     ],
 }
 
-TIMEOUT_SECONDS = 2
+ExecutionStatus = Literal[
+    "ACCEPTED",
+    "WRONG_ANSWER",
+    "RUNTIME_ERROR",
+    "COMPILE_ERROR",
+    "TIMEOUT",
+    "NO_TESTS",
+]
 
 
-def run_code(problem_id: str, user_code: str) -> dict:
-    """
-    Execute user_code against the test suite for problem_id.
-    Returns a dict with keys: status, stdout, stderr, tests_passed, total_tests.
-    """
+class ExecutionResult(TypedDict):
+    status: ExecutionStatus
+    stdout: str
+    stderr: str
+    testsPassed: int
+    totalTests: int
+
+
+class SandboxResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    exit_code: int | None = Field(alias="exitCode")
+    stdout: str
+    stderr: str
+    timed_out: bool = Field(alias="timedOut")
+
+
+def _error_result(
+    status: ExecutionStatus,
+    message: str,
+    total_tests: int,
+) -> ExecutionResult:
+    return {
+        "status": status,
+        "stdout": "",
+        "stderr": message,
+        "testsPassed": 0,
+        "totalTests": total_tests,
+    }
+
+
+def _build_driver(
+    user_code: str,
+    tests: list[dict[str, str]],
+    marker: str,
+) -> str:
+    """Build a judge script with user globals separated from judge globals."""
+    driver = [
+        "import json as _judge_json",
+        "import re as _judge_re",
+        "from typing import List, Optional",
+        f"_user_source = {user_code!r}",
+        "_user_globals = {",
+        "    '__builtins__': __builtins__,",
+        "    'List': List,",
+        "    'Optional': Optional,",
+        "}",
+        "exec(compile(_user_source, '<submission>', 'exec'), _user_globals)",
+        "_passed = 0",
+        "_details = []",
+        "def _norm(value):",
+        "    return _judge_re.sub(r'\\s+', '', str(value))",
+    ]
+
+    for index, test in enumerate(tests, start=1):
+        driver.extend(
+            [
+                "try:",
+                f"    _result = eval({test['call']!r}, _user_globals)",
+                f"    _expected = {test['expected']!r}",
+                "    if _norm(_result) == _norm(_expected):",
+                "        _passed += 1",
+                f"        _details.append('Test {index}: PASS')",
+                "    else:",
+                f"        _details.append('Test {index}: FAIL')",
+                "except Exception as _test_error:",
+                f"    _details.append('Test {index}: ERROR')",
+            ]
+        )
+
+    driver.extend(
+        [
+            "for _detail in _details:",
+            "    print(_detail)",
+            f"print({marker!r} + _judge_json.dumps({{",
+            "    'testsPassed': _passed,",
+            f"    'totalTests': {len(tests)},",
+            "}, separators=(',', ':')))",
+        ]
+    )
+    return "\n".join(driver)
+
+
+def _execute_in_sandbox(script: str) -> SandboxResponse:
+    settings = get_settings()
+    token = settings.sandbox_executor_token
+    if not settings.sandbox_executor_url or not token:
+        raise RuntimeError("Sandbox executor is not configured")
+
+    timeout = settings.sandbox_timeout_seconds
+    with httpx.Client(timeout=timeout + 5.0) as client:
+        response = client.post(
+            f"{settings.sandbox_executor_url.rstrip('/')}/execute",
+            headers={"X-Sandbox-Token": token.get_secret_value()},
+            json={"script": script, "timeoutSeconds": timeout},
+        )
+        response.raise_for_status()
+        return SandboxResponse.model_validate(response.json())
+
+
+def run_code(problem_id: str, user_code: str) -> ExecutionResult:
+    """Execute code only through the isolated sandbox service."""
     tests = PROBLEM_TESTS.get(problem_id, [])
     total_tests = len(tests)
+    if not tests:
+        return _error_result(
+            "NO_TESTS",
+            f"No test cases found for problem ID: {problem_id}",
+            0,
+        )
 
-    if total_tests == 0:
-        return {
-            "status": "NO_TESTS",
-            "stdout": "",
-            "stderr": f"No test cases found for problem ID: {problem_id}",
-            "testsPassed": 0,
-            "totalTests": 0,
-        }
-
-    # Build the driver script
-    driver_lines = [
-        "from typing import List, Optional",
-        "",
-    ]
-    driver_lines.extend(user_code.splitlines())
-    driver_lines.extend([
-        "",
-        "import sys",
-        "_passed = 0",
-        "_total = 0",
-    ])
-
-    for i, test in enumerate(tests):
-        call = test["call"]
-        expected = test["expected"]
-        driver_lines.extend([
-            f"_total += 1",
-            f"try:",
-            f"    _result = str({call})",
-            f"    _expected = str({repr(expected)})",
-            f"    # Normalize list output by stripping spaces",
-            f"    import re",
-            f"    def _norm(s): return re.sub(r'\\s+', '', s)",
-            f"    if _norm(_result) == _norm(_expected):",
-            f"        _passed += 1",
-            f"        print(f'Test {i+1}: PASS  →  {{_result}}')",
-            f"    else:",
-            f"        print(f'Test {i+1}: FAIL  →  Expected {{_expected}}, got {{_result}}')",
-            f"except Exception as e:",
-            f"    print(f'Test {i+1}: ERROR  →  {{e}}')",
-        ])
-
-    driver_lines.append("print(f'\\n{{_passed}}/{{_total}} tests passed')")
-
-    full_script = "\n".join(driver_lines)
+    marker = f"__AIVALYTICS_RESULT_{secrets.token_hex(16)}__"
+    script = _build_driver(user_code, tests, marker)
 
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", full_script],
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_SECONDS,
+        sandbox = _execute_in_sandbox(script)
+    except (httpx.HTTPError, RuntimeError, ValidationError):
+        return _error_result(
+            "RUNTIME_ERROR",
+            "Secure execution service is unavailable.",
+            total_tests,
         )
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
 
-        if result.returncode != 0:
-            # Syntax / runtime error
-            status = "COMPILE_ERROR" if "SyntaxError" in stderr else "RUNTIME_ERROR"
-            return {
-                "status": status,
-                "stdout": stdout,
-                "stderr": stderr,
-                "testsPassed": 0,
-                "totalTests": total_tests,
-            }
+    if sandbox.timed_out:
+        return _error_result(
+            "TIMEOUT",
+            "Execution timed out.",
+            total_tests,
+        )
 
-        # Count passed tests from output
-        tests_passed = 0
-        for line in stdout.splitlines():
-            if "PASS" in line:
-                tests_passed += 1
+    if sandbox.exit_code == 125:
+        return _error_result(
+            "RUNTIME_ERROR",
+            "Secure execution service is unavailable.",
+            total_tests,
+        )
 
-        status = "ACCEPTED" if tests_passed == total_tests else "WRONG_ANSWER"
+    stdout_lines = sandbox.stdout.splitlines()
+    result_line = next(
+        (line for line in reversed(stdout_lines) if line.startswith(marker)),
+        None,
+    )
+    visible_stdout = "\n".join(
+        line for line in stdout_lines if not line.startswith(marker)
+    ).strip()
+
+    if sandbox.exit_code != 0 or not result_line:
+        status: ExecutionStatus = (
+            "COMPILE_ERROR" if "SyntaxError" in sandbox.stderr else "RUNTIME_ERROR"
+        )
         return {
             "status": status,
-            "stdout": stdout,
-            "stderr": stderr,
-            "testsPassed": tests_passed,
+            "stdout": visible_stdout,
+            "stderr": sandbox.stderr,
+            "testsPassed": 0,
             "totalTests": total_tests,
         }
 
-    except subprocess.TimeoutExpired:
-        return {
-            "status": "TIMEOUT",
-            "stdout": "",
-            "stderr": f"Execution timed out after {TIMEOUT_SECONDS} seconds.",
-            "testsPassed": 0,
-            "totalTests": total_tests,
-        }
-    except Exception as exc:
-        return {
-            "status": "RUNTIME_ERROR",
-            "stdout": "",
-            "stderr": str(exc),
-            "testsPassed": 0,
-            "totalTests": total_tests,
-        }
+    try:
+        judge_result = json.loads(result_line[len(marker) :])
+        tests_passed = int(judge_result["testsPassed"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return _error_result(
+            "RUNTIME_ERROR",
+            "Sandbox returned an invalid result.",
+            total_tests,
+        )
+
+    status = "ACCEPTED" if tests_passed == total_tests else "WRONG_ANSWER"
+    return {
+        "status": status,
+        "stdout": visible_stdout,
+        "stderr": sandbox.stderr,
+        "testsPassed": tests_passed,
+        "totalTests": total_tests,
+    }
 
 
 def submit_code(problem_id: str, user_code: str, user_id: str) -> dict:
-    """
-    Run code against all test cases, then persist the result to the
-    coding_submissions table in Supabase.
-    Returns the execution result dict plus the saved submission_id.
-    """
+    """Execute a submission securely, then persist its bounded result."""
     result = run_code(problem_id=problem_id, user_code=user_code)
-
-    # Normalize status to lowercase for DB constraint
     db_status = result["status"].lower()
-    # Map NO_TESTS → runtime_error for DB validity
-    if db_status not in ("accepted", "wrong_answer", "runtime_error", "compile_error", "timeout"):
+    if db_status not in {
+        "accepted",
+        "wrong_answer",
+        "runtime_error",
+        "compile_error",
+        "timeout",
+    }:
         db_status = "runtime_error"
 
     submission_id: str | None = None
@@ -164,16 +233,13 @@ def submit_code(problem_id: str, user_code: str, user_id: str) -> dict:
                 "status": db_status,
                 "tests_passed": result["testsPassed"],
                 "total_tests": result["totalTests"],
-                "stdout": result.get("stdout", "")[:4000],  # cap at 4 KB
-                "stderr": result.get("stderr", "")[:4000],
+                "stdout": result["stdout"][:4000],
+                "stderr": result["stderr"][:4000],
             }
             saved = client.table("coding_submissions").insert(row).execute()
             if saved.data:
                 submission_id = saved.data[0]["id"]
         except Exception:
-            pass  # Non-fatal: return result even if DB save fails
+            pass
 
-    return {
-        **result,
-        "submissionId": submission_id,
-    }
+    return {**result, "submissionId": submission_id}

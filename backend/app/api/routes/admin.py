@@ -40,6 +40,8 @@ router = APIRouter(
 )
 
 BATCH_MIGRATION_MESSAGE = "Batches need the latest Supabase migration before this action can run."
+QUESTION_TYPES = {"mcq", "coding"}
+QUESTION_STATUSES = {"draft", "review", "published", "archived"}
 
 
 def _table_count(client, table: str) -> int:
@@ -48,12 +50,19 @@ def _table_count(client, table: str) -> int:
 
 
 def _normalize_question_type(question_type: str) -> str:
-    return question_type.strip().lower()
+    normalized = question_type.strip().lower()
+    if normalized not in QUESTION_TYPES:
+        raise HTTPException(status_code=400, detail="Question type must be mcq or coding")
+    return normalized
 
 
 def _normalize_question_status(status: str) -> str:
     normalized = status.strip().lower()
-    return "active" if normalized == "published" else normalized
+    if normalized == "active":
+        normalized = "published"
+    if normalized not in QUESTION_STATUSES:
+        raise HTTPException(status_code=400, detail="Question status must be draft, review, published, or archived")
+    return normalized
 
 
 def _validate_question_payload(payload: QuestionCreate) -> None:
@@ -68,13 +77,44 @@ def _validate_question_payload(payload: QuestionCreate) -> None:
         raise HTTPException(status_code=400, detail="Coding questions need at least one test case")
 
 
+def _canonical_question_data(client, payload: QuestionCreate) -> dict:
+    data = payload.model_dump(exclude={"options", "coding_test_cases"})
+    data["question_type"] = _normalize_question_type(payload.question_type)
+    data["status"] = _normalize_question_status(payload.status)
+
+    subject_id = payload.subject_id
+    topic_id = payload.topic_id
+    subtopic_id = payload.subtopic_id
+
+    if subtopic_id:
+        subtopic = _fetch_single(client, "subtopics", subtopic_id)
+        parent_topic = _fetch_single(client, "topics", subtopic["topic_id"])
+        if topic_id and topic_id != subtopic["topic_id"]:
+            raise HTTPException(status_code=400, detail="Subtopic does not belong to the selected topic")
+        if subject_id and subject_id != parent_topic["subject_id"]:
+            raise HTTPException(status_code=400, detail="Subtopic does not belong to the selected subject")
+        topic_id = subtopic["topic_id"]
+        subject_id = parent_topic["subject_id"]
+    elif topic_id:
+        topic = _fetch_single(client, "topics", topic_id)
+        if subject_id and subject_id != topic["subject_id"]:
+            raise HTTPException(status_code=400, detail="Topic does not belong to the selected subject")
+        subject_id = topic["subject_id"]
+    elif subject_id:
+        _fetch_single(client, "subjects", subject_id)
+
+    if data["status"] == "published" and not (subject_id and topic_id and subtopic_id):
+        raise HTTPException(status_code=400, detail="Published questions need subject, topic, and subtopic")
+
+    data["subject_id"] = subject_id
+    data["topic_id"] = topic_id
+    data["subtopic_id"] = subtopic_id
+    return data
+
+
 def _create_question_record(client, payload: QuestionCreate):
     _validate_question_payload(payload)
-    _validate_question_taxonomy(client, payload)
-
-    question_data = payload.model_dump(exclude={"options", "coding_test_cases"})
-    question_data["question_type"] = _normalize_question_type(payload.question_type)
-    question_data["status"] = _normalize_question_status(payload.status)
+    question_data = _canonical_question_data(client, payload)
 
     question_response = client.table("questions").insert(question_data).execute()
     question = question_response.data[0]
@@ -115,18 +155,50 @@ def _create_question_record(client, payload: QuestionCreate):
 
 
 def _validate_question_taxonomy(client, payload: QuestionCreate) -> None:
-    if payload.subject_id:
-        _fetch_single(client, "subjects", payload.subject_id)
+    _canonical_question_data(client, payload)
 
-    if payload.topic_id:
-        topic = _fetch_single(client, "topics", payload.topic_id)
-        if payload.subject_id and topic["subject_id"] != payload.subject_id:
-            raise HTTPException(status_code=400, detail="Topic does not belong to the selected subject")
 
-    if payload.subtopic_id:
-        subtopic = _fetch_single(client, "subtopics", payload.subtopic_id)
-        if payload.topic_id and subtopic["topic_id"] != payload.topic_id:
-            raise HTTPException(status_code=400, detail="Subtopic does not belong to the selected topic")
+def _question_taxonomy_issues(question: dict) -> list[str]:
+    issues: list[str] = []
+    status = _normalize_question_status(str(question.get("status") or "draft"))
+    subject_id = question.get("subject_id")
+    topic_id = question.get("topic_id")
+    subtopic_id = question.get("subtopic_id")
+    topic = question.get("topics") or {}
+    subtopic = question.get("subtopics") or {}
+    options = question.get("question_options") or []
+    test_cases = question.get("coding_test_cases") or []
+    question_type = str(question.get("question_type") or "").lower()
+
+    if status == "published" and not (subject_id and topic_id and subtopic_id):
+        issues.append("Published question is missing a complete taxonomy path")
+    if topic_id and subject_id and topic.get("subject_id") and topic["subject_id"] != subject_id:
+        issues.append("Topic does not belong to the selected subject")
+    if subtopic_id and topic_id and subtopic.get("topic_id") and subtopic["topic_id"] != topic_id:
+        issues.append("Subtopic does not belong to the selected topic")
+    if question_type == "mcq":
+        if len(options) < 2:
+            issues.append("MCQ has fewer than two options")
+        if not any(option.get("is_correct") for option in options):
+            issues.append("MCQ has no correct answer")
+    if question_type == "coding" and not test_cases:
+        issues.append("Coding question has no judge test cases")
+    return issues
+
+
+def _ensure_question_matches_test(client, payload: TestQuestionCreate) -> None:
+    test = _fetch_single(client, "tests", payload.test_id)
+    question = _fetch_single(client, "questions", payload.question_id)
+    question_status = _normalize_question_status(str(question.get("status") or "draft"))
+
+    if question_status == "archived":
+        raise HTTPException(status_code=400, detail="Archived questions cannot be attached to tests")
+    if test.get("is_active") and question_status != "published":
+        raise HTTPException(status_code=400, detail="Active tests can only use published questions")
+    if test.get("topic_id") and question.get("topic_id") != test["topic_id"]:
+        raise HTTPException(status_code=400, detail="Question topic does not match the selected test topic")
+    if test.get("subject_id") and question.get("subject_id") != test["subject_id"]:
+        raise HTTPException(status_code=400, detail="Question subject does not match the selected test subject")
 
 
 def _fetch_single(client, table: str, row_id: str):
@@ -643,6 +715,10 @@ def list_tests():
 @router.post("/tests")
 def create_test(payload: TestCreate):
     client = get_supabase_admin()
+    if payload.topic_id:
+        topic = _fetch_single(client, "topics", payload.topic_id)
+        if payload.subject_id and topic["subject_id"] != payload.subject_id:
+            raise HTTPException(status_code=400, detail="Test topic does not belong to the selected subject")
     response = client.table("tests").insert(payload.model_dump()).execute()
     return {"item": response.data[0]}
 
@@ -651,6 +727,10 @@ def create_test(payload: TestCreate):
 def update_test(test_id: str, payload: TestUpdate):
     client = get_supabase_admin()
     _fetch_single(client, "tests", test_id)
+    if payload.topic_id:
+        topic = _fetch_single(client, "topics", payload.topic_id)
+        if payload.subject_id and topic["subject_id"] != payload.subject_id:
+            raise HTTPException(status_code=400, detail="Test topic does not belong to the selected subject")
     response = client.table("tests").update(payload.model_dump()).eq("id", test_id).execute()
     return {"item": response.data[0]}
 
@@ -669,7 +749,7 @@ def list_test_questions(test_id: str):
     client = get_supabase_admin()
     response = (
         client.table("test_questions")
-        .select("*, questions(title, question_type, difficulty, status)")
+        .select("*, questions(title, question_type, difficulty, status, subject_id, topic_id, subtopic_id, subjects(name), topics(name), subtopics(name))")
         .eq("test_id", test_id)
         .order("sort_order")
         .execute()
@@ -680,6 +760,7 @@ def list_test_questions(test_id: str):
 @router.post("/test-questions")
 def create_test_question(payload: TestQuestionCreate):
     client = get_supabase_admin()
+    _ensure_question_matches_test(client, payload)
 
     existing = (
         client.table("test_questions")
@@ -803,6 +884,74 @@ def list_questions(question_type: str | None = None):
     return {"items": response.data}
 
 
+@router.get("/questions/audit")
+def audit_questions():
+    client = get_supabase_admin()
+    questions = (
+        client.table("questions")
+        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*)")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    tests = client.table("tests").select("id,title,subject_id,topic_id,is_active").execute().data or []
+    test_lookup = {test["id"]: test for test in tests}
+    links = (
+        client.table("test_questions")
+        .select("test_id,question_id, questions(id,title,subject_id,topic_id,status)")
+        .execute()
+        .data
+        or []
+    )
+
+    question_issues = [
+        {
+            "id": question["id"],
+            "title": question.get("title") or question.get("prompt", "")[:80],
+            "status": question.get("status") or "draft",
+            "question_type": question.get("question_type") or "unknown",
+            "issues": issues,
+        }
+        for question in questions
+        if (issues := _question_taxonomy_issues(question))
+    ]
+
+    test_issues = []
+    for link in links:
+        test = test_lookup.get(link.get("test_id"))
+        question = link.get("questions") or {}
+        if not test or not question:
+            continue
+        issues = []
+        if test.get("topic_id") and question.get("topic_id") != test["topic_id"]:
+            issues.append("Question topic does not match test topic")
+        if test.get("subject_id") and question.get("subject_id") != test["subject_id"]:
+            issues.append("Question subject does not match test subject")
+        if test.get("is_active") and _normalize_question_status(str(question.get("status") or "draft")) != "published":
+            issues.append("Active test contains a non-published question")
+        if issues:
+            test_issues.append(
+                {
+                    "test_id": test["id"],
+                    "test_title": test["title"],
+                    "question_id": question.get("id"),
+                    "question_title": question.get("title") or "Untitled question",
+                    "issues": issues,
+                }
+            )
+
+    return {
+        "summary": {
+            "questions_checked": len(questions),
+            "question_issues": len(question_issues),
+            "test_issues": len(test_issues),
+        },
+        "question_issues": question_issues,
+        "test_issues": test_issues,
+    }
+
+
 @router.post("/questions")
 def create_question(payload: QuestionCreate):
     client = get_supabase_admin()
@@ -822,11 +971,7 @@ def update_question(question_id: str, payload: QuestionUpdate):
 
     client = get_supabase_admin()
     _fetch_single(client, "questions", question_id)
-    _validate_question_taxonomy(client, payload)
-
-    question_data = payload.model_dump(exclude={"options", "coding_test_cases"})
-    question_data["question_type"] = _normalize_question_type(payload.question_type)
-    question_data["status"] = _normalize_question_status(payload.status)
+    question_data = _canonical_question_data(client, payload)
 
     response = client.table("questions").update(question_data).eq("id", question_id).execute()
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from uuid import UUID
 
+from fastapi import HTTPException
 from postgrest.exceptions import APIError
 
 from app.core.supabase import get_supabase_client
@@ -21,13 +21,16 @@ ANSWERS: dict[tuple[str, int], dict] = {}
 
 
 class AttemptService:
-    def start_attempt(self, payload: StartAttemptRequest) -> TestAttempt:
+    def start_attempt(
+        self,
+        payload: StartAttemptRequest,
+        user_id: str,
+    ) -> TestAttempt:
         client = get_supabase_client()
 
         if client:
             try:
                 test_id = self._resolve_test_id(payload.testId)
-                user_id = self._resolve_user_id(payload.userId)
                 response = (
                     client.table("test_attempts")
                     .insert(
@@ -44,14 +47,19 @@ class AttemptService:
             except (APIError, IndexError, ValueError):
                 pass
 
-        return self._start_mock_attempt(payload)
+        return self._start_mock_attempt(payload, user_id)
 
-    def get_questions(self, attempt_id: str, question_number: int | None = None) -> AttemptQuestionsResponse:
+    def get_questions(
+        self,
+        attempt_id: str,
+        user_id: str,
+        question_number: int | None = None,
+    ) -> AttemptQuestionsResponse:
         client = get_supabase_client()
 
         if client:
             try:
-                attempt = self._get_attempt(attempt_id)
+                attempt = self._get_attempt(attempt_id, user_id)
                 ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
                 if not ordered_questions:
                     raise ValueError("Test has no questions")
@@ -82,19 +90,20 @@ class AttemptService:
             except (APIError, IndexError, ValueError):
                 pass
 
-        return self._get_mock_questions(attempt_id)
+        return self._get_mock_questions(attempt_id, user_id)
 
     def save_answer(
         self,
         attempt_id: str,
         question_id: int,
         payload: SaveAnswerRequest,
+        user_id: str,
     ) -> SaveAnswerResponse:
         client = get_supabase_client()
 
         if client:
             try:
-                attempt = self._get_attempt(attempt_id)
+                attempt = self._get_attempt(attempt_id, user_id)
                 ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
                 question_number = self._clamp_question_number(question_id, len(ordered_questions))
                 question_link = ordered_questions[question_number - 1]
@@ -130,14 +139,23 @@ class AttemptService:
             except (APIError, IndexError, ValueError):
                 pass
 
-        return self._save_mock_answer(attempt_id, question_id, payload)
+        return self._save_mock_answer(
+            attempt_id,
+            question_id,
+            payload,
+            user_id,
+        )
 
-    def submit_attempt(self, attempt_id: str) -> SubmitAttemptResponse:
+    def submit_attempt(
+        self,
+        attempt_id: str,
+        user_id: str,
+    ) -> SubmitAttemptResponse:
         client = get_supabase_client()
 
         if client:
             try:
-                result = self._calculate_result(attempt_id)
+                result = self._calculate_result(attempt_id, user_id)
                 (
                     client.table("test_attempts")
                     .update(
@@ -149,6 +167,7 @@ class AttemptService:
                         }
                     )
                     .eq("id", attempt_id)
+                    .eq("user_id", user_id)
                     .execute()
                 )
                 return SubmitAttemptResponse(
@@ -159,8 +178,8 @@ class AttemptService:
             except (APIError, ValueError):
                 pass
 
-        if attempt_id in ATTEMPTS:
-            ATTEMPTS[attempt_id]["status"] = "SUBMITTED"
+        attempt = self._get_mock_attempt(attempt_id, user_id)
+        attempt["status"] = "SUBMITTED"
 
         return SubmitAttemptResponse(
             attempt_id=attempt_id,
@@ -168,15 +187,16 @@ class AttemptService:
             result_url=f"/practice-tests/results?attemptId={attempt_id}",
         )
 
-    def get_result(self, attempt_id: str) -> AttemptResult:
+    def get_result(self, attempt_id: str, user_id: str) -> AttemptResult:
         client = get_supabase_client()
 
         if client:
             try:
-                return self._calculate_result(attempt_id)
+                return self._calculate_result(attempt_id, user_id)
             except (APIError, ValueError):
                 pass
 
+        self._get_mock_attempt(attempt_id, user_id)
         return AttemptResult(
             attempt_id=attempt_id,
             title=SELECTED_TEST["title"],
@@ -206,30 +226,23 @@ class AttemptService:
             raise ValueError("No tests available")
         return fallback_rows[0]["id"]
 
-    def _resolve_user_id(self, requested_user_id: str) -> str:
-        try:
-            UUID(requested_user_id)
-            return requested_user_id
-        except ValueError:
-            pass
-
+    def _get_attempt(self, attempt_id: str, user_id: str) -> dict:
         client = get_supabase_client()
         if not client:
             raise ValueError("Supabase client unavailable")
 
-        rows = client.table("profiles").select("id").limit(1).execute().data or []
+        rows = (
+            client.table("test_attempts")
+            .select("*")
+            .eq("id", attempt_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
         if not rows:
-            raise ValueError("No profiles available for demo attempt")
-        return rows[0]["id"]
-
-    def _get_attempt(self, attempt_id: str) -> dict:
-        client = get_supabase_client()
-        if not client:
-            raise ValueError("Supabase client unavailable")
-
-        rows = client.table("test_attempts").select("*").eq("id", attempt_id).limit(1).execute().data or []
-        if not rows:
-            raise ValueError("Attempt not found")
+            raise HTTPException(status_code=404, detail="Attempt not found")
         return rows[0]
 
     def _get_ordered_test_questions(self, test_id: str) -> list[dict]:
@@ -349,8 +362,8 @@ class AttemptService:
             "answer_id": answer.get("selected_option_id") if answer else None,
         }
 
-    def _calculate_result(self, attempt_id: str) -> AttemptResult:
-        attempt = self._get_attempt(attempt_id)
+    def _calculate_result(self, attempt_id: str, user_id: str) -> AttemptResult:
+        attempt = self._get_attempt(attempt_id, user_id)
         test = self._get_test(attempt["test_id"])
         ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
         answers = self._get_attempt_answers(attempt_id)
@@ -483,13 +496,17 @@ class AttemptService:
         except ValueError:
             return "N/A"
 
-    def _start_mock_attempt(self, payload: StartAttemptRequest) -> TestAttempt:
+    def _start_mock_attempt(
+        self,
+        payload: StartAttemptRequest,
+        user_id: str,
+    ) -> TestAttempt:
         from uuid import uuid4
 
         attempt_id = str(uuid4())
         attempt = {
             "id": attempt_id,
-            "user_id": payload.userId,
+            "user_id": user_id,
             "test_id": payload.testId,
             "status": "IN_PROGRESS",
             "current_question": 12,
@@ -498,18 +515,18 @@ class AttemptService:
         ATTEMPTS[attempt_id] = attempt
         return TestAttempt.model_validate(attempt)
 
-    def _get_mock_questions(self, attempt_id: str) -> AttemptQuestionsResponse:
-        attempt = ATTEMPTS.get(
-            attempt_id,
-            {
-                "id": attempt_id,
-                "user_id": "demo-user",
-                "test_id": "prime-factors",
-                "status": "IN_PROGRESS",
-                "current_question": 12,
-                "answered_count": 12,
-            },
-        )
+    def _get_mock_attempt(self, attempt_id: str, user_id: str) -> dict:
+        attempt = ATTEMPTS.get(attempt_id)
+        if not attempt or attempt["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail="Attempt not found")
+        return attempt
+
+    def _get_mock_questions(
+        self,
+        attempt_id: str,
+        user_id: str,
+    ) -> AttemptQuestionsResponse:
+        attempt = self._get_mock_attempt(attempt_id, user_id)
 
         return AttemptQuestionsResponse(
             attempt=TestAttempt.model_validate(attempt),
@@ -523,7 +540,9 @@ class AttemptService:
         attempt_id: str,
         question_id: int,
         payload: SaveAnswerRequest,
+        user_id: str,
     ) -> SaveAnswerResponse:
+        attempt = self._get_mock_attempt(attempt_id, user_id)
         answer = {
             "attempt_id": attempt_id,
             "question_id": question_id,
@@ -532,9 +551,9 @@ class AttemptService:
         }
         ANSWERS[(attempt_id, question_id)] = answer
 
-        if attempt_id in ATTEMPTS and payload.status == "answered":
-            ATTEMPTS[attempt_id]["answered_count"] = max(
-                ATTEMPTS[attempt_id]["answered_count"],
+        if payload.status == "answered":
+            attempt["answered_count"] = max(
+                attempt["answered_count"],
                 question_id,
             )
 

@@ -1,3 +1,4 @@
+import { Check, FolderOpen } from "lucide-react";
 import type { SelectionItem } from "../../../types/testFlow";
 
 interface SelectionColumnProps {
@@ -20,7 +21,9 @@ function SelectionColumn({
   return (
     <section className="flex flex-col gap-4 h-[520px]">
       <h2 className="flex items-center gap-2 text-xl font-bold text-practice-ink">
-        <span className="text-practice-amberDark">{icon}</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded bg-practice-amber/25 text-xs font-extrabold text-practice-amberDark">
+          {icon}
+        </span>
         {title}
       </h2>
       <div className="custom-scrollbar flex flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#E5DEC8] bg-white p-4">
@@ -29,7 +32,8 @@ function SelectionColumn({
             <span className="text-sm font-bold text-practice-subdued animate-pulse">Loading data...</span>
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center p-6 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <FolderOpen className="h-8 w-8 text-practice-subdued/55" aria-hidden="true" />
             <p className="text-xs font-bold text-practice-subdued">
               No items available.
             </p>
@@ -54,7 +58,7 @@ function SelectionColumn({
                   <h3 className="font-semibold text-practice-text flex items-center gap-1.5">
                     {item.title}
                     {isSelected && (
-                      <span className="text-xs text-practice-amberDark font-black">✓</span>
+                      <Check className="h-4 w-4 text-practice-amberDark" aria-hidden="true" />
                     )}
                   </h3>
                   {item.badge ? (

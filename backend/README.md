@@ -26,7 +26,9 @@ Backend:  http://localhost:8000
 Docs:     http://localhost:8000/docs
 Health check: http://localhost:8000/api/health
 
-If Supabase credentials are not set, the backend uses in-memory/mock data so frontend work can continue.
+Supabase authentication configuration is mandatory. The backend stops during
+startup with a configuration error when `SUPABASE_URL` or
+`SUPABASE_SERVICE_ROLE_KEY` is missing.
 
 ## Main Endpoints
 
@@ -50,7 +52,6 @@ GET    /api/users/:userId/weak-areas
 
 ```json
 {
-  "userId": "demo-user",
   "testId": "prime-factors",
   "subjectId": "quant",
   "topicId": "number-systems",

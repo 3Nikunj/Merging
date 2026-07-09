@@ -1,3 +1,5 @@
+import { Check } from "lucide-react";
+
 interface StepIndicatorProps {
   currentStep: number;
 }
@@ -24,7 +26,7 @@ function StepIndicator({ currentStep }: StepIndicatorProps) {
                   isActive ? "ring-4 ring-practice-amber/30" : "",
                 ].join(" ")}
               >
-                {isDone ? "ok" : stepNumber}
+                {isDone ? <Check className="h-5 w-5" aria-hidden="true" /> : stepNumber}
               </div>
               <span
                 className={[

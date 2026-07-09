@@ -77,6 +77,12 @@ export interface TestQuestionLink {
     question_type: string;
     difficulty?: string | null;
     status?: string | null;
+    subject_id?: string | null;
+    topic_id?: string | null;
+    subtopic_id?: string | null;
+    subjects?: { name: string } | null;
+    topics?: { name: string } | null;
+    subtopics?: { name: string } | null;
   } | null;
 }
 
@@ -113,6 +119,32 @@ export interface CodingTestCase {
   expected_output: string;
   is_hidden: boolean;
   sort_order: number;
+}
+
+export interface QuestionAuditIssue {
+  id: string;
+  title: string;
+  status: string;
+  question_type: string;
+  issues: string[];
+}
+
+export interface TestAuditIssue {
+  test_id: string;
+  test_title: string;
+  question_id: string;
+  question_title: string;
+  issues: string[];
+}
+
+export interface QuestionAudit {
+  summary: {
+    questions_checked: number;
+    question_issues: number;
+    test_issues: number;
+  };
+  question_issues: QuestionAuditIssue[];
+  test_issues: TestAuditIssue[];
 }
 
 export interface ProgrammingProblem {

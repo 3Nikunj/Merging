@@ -7,7 +7,8 @@ AnswerStatus = Literal["answered", "marked", "not_answered"]
 
 
 class StartAttemptRequest(BaseModel):
-    userId: str
+    # Accepted for backward compatibility only. Ownership comes from the JWT.
+    userId: str | None = None
     testId: str
     subjectId: str | None = None
     topicId: str | None = None

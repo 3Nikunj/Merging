@@ -8,7 +8,10 @@ import type {
 } from "../types/testFlow";
 import { supabase } from "./supabase";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim();
+if (!API_BASE_URL) {
+  throw new Error("Missing required API configuration: VITE_API_BASE_URL");
+}
 
 interface PracticeTestsResponse {
   tests: PracticeTestCardData[];
@@ -105,11 +108,11 @@ api.getSubtopics = (topicId?: string) =>
     topicId ? `/api/practice-tests/subtopics?topic_id=${topicId}` : "/api/practice-tests/subtopics"
   );
 
-api.getRecommendations = (userId: string) =>
-  api<{ recommendations: Recommendation[] }>(`/api/users/${userId}/recommendations`);
+api.getRecommendations = () =>
+  api<{ recommendations: Recommendation[] }>("/api/users/me/recommendations");
 
-api.getWeakAreas = (userId: string) =>
-  api<{ weakAreas: WeakArea[] }>(`/api/users/${userId}/weak-areas`);
+api.getWeakAreas = () =>
+  api<{ weakAreas: WeakArea[] }>("/api/users/me/weak-areas");
 
 api.startAttempt = (
   testId: string,
@@ -117,17 +120,14 @@ api.startAttempt = (
   topicId: string,
   subtopicId: string
 ) => {
-  return supabase.auth.getUser().then(({ data: { user } }) => {
-    return api<TestAttempt>("/api/test-attempts", {
-      method: "POST",
-      body: JSON.stringify({
-        userId: user?.id || "demo-user",
-        testId,
-        subjectId,
-        topicId,
-        subtopicId,
-      }),
-    });
+  return api<TestAttempt>("/api/test-attempts", {
+    method: "POST",
+    body: JSON.stringify({
+      testId,
+      subjectId,
+      topicId,
+      subtopicId,
+    }),
   });
 };
 
@@ -164,13 +164,13 @@ api.runCode = (problemId: string, code: string) =>
     body: JSON.stringify({ problemId, code }),
   });
 
-api.submitCode = (problemId: string, code: string, userId: string) =>
+api.submitCode = (problemId: string, code: string) =>
   api<RunCodeResponse & { submissionId: string | null }>("/api/coding/submit", {
     method: "POST",
-    body: JSON.stringify({ problemId, code, userId }),
+    body: JSON.stringify({ problemId, code }),
   });
 
-api.getCodingSubmissions = (userId: string, problemId?: string) =>
+api.getCodingSubmissions = (problemId?: string) =>
   api<{
     submissions: Array<{
       id: string;
@@ -185,5 +185,5 @@ api.getCodingSubmissions = (userId: string, problemId?: string) =>
       stderr: string | null;
     }>;
   }>(
-    `/api/coding/submissions/${userId}${problemId ? `?problem_id=${problemId}` : ""}`
+    `/api/coding/submissions${problemId ? `?problem_id=${problemId}` : ""}`
   );

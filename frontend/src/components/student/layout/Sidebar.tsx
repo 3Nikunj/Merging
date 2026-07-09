@@ -1,6 +1,16 @@
+import {
+  BarChart3,
+  Bot,
+  BriefcaseBusiness,
+  ClipboardList,
+  Code2,
+  LayoutDashboard,
+  Sparkles,
+  Trophy,
+  User,
+} from "lucide-react";
+import type { JSX } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-
-import { JSX } from "react";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard" },
@@ -14,46 +24,14 @@ const navItems = [
 ];
 
 const icons: Record<string, JSX.Element> = {
-  Dashboard: (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-    </svg>
-  ),
-  Tests: (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-    </svg>
-  ),
-  "Company Simulation": (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-    </svg>
-  ),
-  "AI Interview": (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-    </svg>
-  ),
-  "Coding Practice": (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-    </svg>
-  ),
-  Contests: (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5a2 2 0 10-2 2h2zm-2 2h4M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" />
-    </svg>
-  ),
-  Results: (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-  ),
-  Profile: (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  ),
+  Dashboard: <LayoutDashboard className="h-4 w-4" aria-hidden="true" />,
+  Tests: <ClipboardList className="h-4 w-4" aria-hidden="true" />,
+  "Company Simulation": <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />,
+  "AI Interview": <Bot className="h-4 w-4" aria-hidden="true" />,
+  "Coding Practice": <Code2 className="h-4 w-4" aria-hidden="true" />,
+  Contests: <Trophy className="h-4 w-4" aria-hidden="true" />,
+  Results: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
+  Profile: <User className="h-4 w-4" aria-hidden="true" />,
 };
 
 function Sidebar() {
@@ -101,8 +79,8 @@ function Sidebar() {
         </nav>
 
         <div className="mt-auto pt-8">
-          <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-practice-amber px-4 py-3 text-sm font-extrabold text-practice-amberDark transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-sidebar">
-            <span className="text-base">*</span>
+          <button className="flex w-full items-center justify-center gap-2 rounded bg-practice-amber px-4 py-3 text-sm font-extrabold text-practice-amberDark transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-sidebar">
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
             Upgrade to Pro
           </button>
         </div>

@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import type { PracticeTestCardData } from "../../../types/practiceTest";
 
 interface PracticeFilterBarProps {
@@ -26,9 +27,7 @@ function PracticeFilterBar({
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border border-practice-line bg-white p-4 shadow-dashboard">
       <div className="relative min-w-[240px] flex-1">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-practice-subdued">
-          =
-        </span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-practice-subdued" aria-hidden="true" />
         <input
           className="w-full rounded border border-practice-line bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition placeholder:text-practice-subdued/70 focus:border-practice-ink focus:ring-2 focus:ring-practice-ink/10"
           placeholder="Search by title..."

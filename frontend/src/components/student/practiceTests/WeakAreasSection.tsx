@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Target } from "lucide-react";
 import { weakAreas } from "../../../data/practiceTests";
 import { api, type WeakArea } from "../../../services/api";
 
@@ -7,17 +8,16 @@ function WeakAreasSection() {
 
   useEffect(() => {
     api
-      .getWeakAreas("demo-user")
+      .getWeakAreas()
       .then((response) => setAreas(response.weakAreas))
       .catch(() => setAreas(weakAreas));
   }, []);
 
   return (
     <section className="relative overflow-hidden rounded-lg border border-practice-ink bg-practice-ink p-4 text-white shadow-dashboard">
-      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-practice-amber/20 blur-2xl" />
       <div className="relative">
         <h4 className="mb-4 flex items-center gap-2 text-xl font-bold">
-          <span className="text-practice-amber">v</span>
+          <Target className="h-5 w-5 text-practice-amber" aria-hidden="true" />
           Weak Areas
         </h4>
         <p className="mb-6 text-xs italic text-white/60">Based on your last 3 attempts</p>

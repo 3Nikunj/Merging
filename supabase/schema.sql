@@ -26,15 +26,22 @@ create table if not exists public.profile_academics (
 
 -- Admin Security Helper function
 create or replace function public.is_admin()
-returns boolean security definer as $$
-begin
-  return (
-    select role = 'admin'
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
     from public.profiles
-    where id = auth.uid()
+    where id = (select auth.uid())
+      and role = 'admin'
   );
-end;
-$$ language plpgsql;
+$$;
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
 
 -- Colleges
 create table if not exists public.colleges (
@@ -269,7 +276,8 @@ create index if not exists idx_coding_submissions_problem_id on public.coding_su
 create index if not exists idx_coding_submissions_status on public.coding_submissions(status);
 
 -- Reporting View
-create or replace view public.reporting_user_test_latest as
+create or replace view public.reporting_user_test_latest
+with (security_invoker = true) as
 select distinct on (ta.user_id, ta.test_id)
   ta.user_id,
   ta.test_id,
@@ -339,11 +347,21 @@ create policy tests_admin on public.tests for all using (is_admin()) with check 
 create policy questions_read on public.questions for select using (status = 'published' or status = 'active' or is_admin());
 create policy questions_admin on public.questions for all using (is_admin()) with check (is_admin());
 
-create policy question_options_read on public.question_options for select using (auth.uid() is not null);
-create policy question_options_admin on public.question_options for all using (is_admin()) with check (is_admin());
+create policy question_options_read_safe on public.question_options for select to authenticated
+using (
+  (select public.is_admin())
+  or exists (
+    select 1
+    from public.questions
+    where questions.id = question_options.question_id
+      and questions.status in ('active', 'published')
+  )
+);
+create policy question_options_admin on public.question_options for all to authenticated
+using ((select public.is_admin())) with check ((select public.is_admin()));
 
-create policy coding_test_cases_read on public.coding_test_cases for select using (is_admin());
-create policy coding_test_cases_admin on public.coding_test_cases for all using (is_admin()) with check (is_admin());
+create policy coding_test_cases_admin on public.coding_test_cases for all to authenticated
+using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy programming_problems_read on public.programming_problems for select using (active or is_admin());
 create policy programming_problems_admin on public.programming_problems for all using (is_admin()) with check (is_admin());
@@ -351,14 +369,176 @@ create policy programming_problems_admin on public.programming_problems for all 
 create policy test_questions_read on public.test_questions for select using (auth.uid() is not null);
 create policy test_questions_admin on public.test_questions for all using (is_admin()) with check (is_admin());
 
-create policy test_attempts_read on public.test_attempts for select using (auth.uid() = user_id or is_admin());
-create policy test_attempts_write on public.test_attempts for all using (auth.uid() = user_id or is_admin()) with check (auth.uid() = user_id or is_admin());
+create policy test_attempts_select_own on public.test_attempts for select to authenticated
+using ((select auth.uid()) = user_id or (select public.is_admin()));
+create policy test_attempts_admin on public.test_attempts for all to authenticated
+using ((select public.is_admin())) with check ((select public.is_admin()));
 
-create policy test_attempt_answers_read on public.test_attempt_answers for select using (auth.uid() is not null);
-create policy test_attempt_answers_write on public.test_attempt_answers for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy test_attempt_answers_select_own on public.test_attempt_answers for select to authenticated
+using (
+  (select public.is_admin())
+  or exists (
+    select 1
+    from public.test_attempts
+    where test_attempts.id = test_attempt_answers.attempt_id
+      and test_attempts.user_id = (select auth.uid())
+  )
+);
+create policy test_attempt_answers_admin on public.test_attempt_answers for all to authenticated
+using ((select public.is_admin())) with check ((select public.is_admin()));
 
 create policy recommendations_read on public.user_recommendations for select using (auth.uid() = user_id or is_admin());
 create policy recommendations_admin on public.user_recommendations for all using (is_admin()) with check (is_admin());
 
 create policy weak_areas_read on public.weak_areas for select using (auth.uid() = user_id or is_admin());
 create policy weak_areas_admin on public.weak_areas for all using (is_admin()) with check (is_admin());
+
+-- Limit direct Data API access to non-sensitive assessment data. The FastAPI
+-- backend uses service_role for trusted student and admin workflows.
+revoke all privileges on table public.question_options from anon, authenticated;
+revoke all privileges on table public.coding_test_cases from anon, authenticated;
+revoke all privileges on table public.test_attempts from anon, authenticated;
+revoke all privileges on table public.test_attempt_answers from anon, authenticated;
+
+grant select (id, question_id, option_key, option_text, sort_order)
+on public.question_options to authenticated;
+grant select on public.test_attempts to authenticated;
+grant select (id, attempt_id, question_id, selected_option_id, answer_json)
+on public.test_attempt_answers to authenticated;
+
+revoke all privileges on table public.reporting_user_test_latest
+from anon, authenticated;
+grant select on table public.reporting_user_test_latest to service_role;
+
+-- Least-privilege baseline for the exposed public schema. Browser clients use
+-- Supabase Auth directly and read only profiles(id, role); all business data is
+-- served through the FastAPI service-role client.
+revoke all privileges on schema public from public, anon, authenticated;
+grant usage on schema public to authenticated, service_role;
+
+do $$
+declare
+  relation record;
+  column_name record;
+  sequence_name record;
+  function_record record;
+  view_record record;
+  owner_name text;
+begin
+  for relation in
+    select n.nspname as schema_name, c.relname as relation_name
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'p')
+  loop
+    execute format(
+      'revoke all privileges on table %I.%I from anon, authenticated',
+      relation.schema_name,
+      relation.relation_name
+    );
+    for column_name in
+      select a.attname
+      from pg_catalog.pg_attribute a
+      join pg_catalog.pg_class c on c.oid = a.attrelid
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = relation.schema_name
+        and c.relname = relation.relation_name
+        and a.attnum > 0
+        and not a.attisdropped
+    loop
+      execute format(
+        'revoke select (%1$I), insert (%1$I), update (%1$I), references (%1$I) '
+        'on table %2$I.%3$I from anon, authenticated',
+        column_name.attname,
+        relation.schema_name,
+        relation.relation_name
+      );
+    end loop;
+  end loop;
+
+  for sequence_name in
+    select n.nspname as schema_name, c.relname
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'S'
+  loop
+    execute format(
+      'revoke all privileges on sequence %I.%I from anon, authenticated',
+      sequence_name.schema_name,
+      sequence_name.relname
+    );
+  end loop;
+
+  for function_record in
+    select p.oid
+    from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.prokind = 'f'
+  loop
+    execute format(
+      'alter function %s set search_path = ''''',
+      function_record.oid::regprocedure
+    );
+    execute format(
+      'revoke all privileges on function %s '
+      'from public, anon, authenticated, service_role',
+      function_record.oid::regprocedure
+    );
+  end loop;
+
+  for view_record in
+    select n.nspname as schema_name, c.relname as view_name
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'v'
+  loop
+    execute format(
+      'alter view %I.%I set (security_invoker = true)',
+      view_record.schema_name,
+      view_record.view_name
+    );
+    execute format(
+      'revoke all privileges on table %I.%I '
+      'from public, anon, authenticated, service_role',
+      view_record.schema_name,
+      view_record.view_name
+    );
+    execute format(
+      'grant select on table %I.%I to service_role',
+      view_record.schema_name,
+      view_record.view_name
+    );
+  end loop;
+
+  foreach owner_name in array array['postgres', 'supabase_admin']
+  loop
+    if exists (select 1 from pg_catalog.pg_roles where rolname = owner_name)
+      and (
+        owner_name = current_user
+        or pg_catalog.pg_has_role(current_user, owner_name, 'MEMBER')
+      ) then
+      execute format(
+        'alter default privileges for role %I in schema public '
+        'revoke all privileges on tables from anon, authenticated',
+        owner_name
+      );
+      execute format(
+        'alter default privileges for role %I in schema public '
+        'revoke all privileges on sequences from anon, authenticated',
+        owner_name
+      );
+      execute format(
+        'alter default privileges for role %I in schema public '
+        'revoke all privileges on functions '
+        'from public, anon, authenticated, service_role',
+        owner_name
+      );
+    elsif exists (select 1 from pg_catalog.pg_roles where rolname = owner_name) then
+      raise notice 'Skipping protected default-privilege owner %', owner_name;
+    end if;
+  end loop;
+end;
+$$;
+
+grant execute on function public.is_admin() to authenticated;
+grant select (id, role) on table public.profiles to authenticated;

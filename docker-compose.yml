@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   backend:
     build:
@@ -10,26 +8,103 @@ services:
       - .env
     ports:
       - "${API_PORT:-8000}:8000"
-    volumes:
-      - ./backend:/app
     environment:
-      - APP_ENV=development
-      - FRONTEND_ORIGIN=http://localhost:5173
+      - APP_ENV=production
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:?Set FRONTEND_ORIGINS to the HTTPS frontend origin list}
+      - SUPABASE_URL=${SUPABASE_URL:?Set SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY}
+      - SANDBOX_EXECUTOR_URL=http://sandbox-executor:8080
+      - SANDBOX_EXECUTOR_TOKEN=${SANDBOX_EXECUTOR_TOKEN:?Set SANDBOX_EXECUTOR_TOKEN}
+      - SANDBOX_TIMEOUT_SECONDS=${SANDBOX_TIMEOUT_SECONDS:-2}
+    networks:
+      - app
+      - sandbox-control
+    depends_on:
+      sandbox-executor:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+
+  sandbox-runtime:
+    build:
+      context: ./executor/runtime
+      dockerfile: Dockerfile
+    image: ${SANDBOX_IMAGE:-aivalytics-python-sandbox:local}
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  sandbox-executor:
+    build:
+      context: ./executor
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - SANDBOX_EXECUTOR_TOKEN=${SANDBOX_EXECUTOR_TOKEN:?Set SANDBOX_EXECUTOR_TOKEN}
+      - SANDBOX_IMAGE=${SANDBOX_IMAGE:-aivalytics-python-sandbox:local}
+      - SANDBOX_RUNTIME=${SANDBOX_RUNTIME:-runsc}
+      - SANDBOX_ALLOW_NATIVE_RUNTIME=${SANDBOX_ALLOW_NATIVE_RUNTIME:-false}
+      - SANDBOX_MAX_CONCURRENT=${SANDBOX_MAX_CONCURRENT:-4}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - ${DOCKER_GID:-0}
+    networks:
+      - sandbox-control
+    depends_on:
+      sandbox-runtime:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Set VITE_API_BASE_URL}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Set VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Set VITE_SUPABASE_ANON_KEY}
     container_name: aivalytics-unified-frontend
-    env_file:
-      - .env
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "${FRONTEND_PORT:-5173}:8080"
     depends_on:
       - backend
-    environment:
-      - NODE_ENV=development
-      - VITE_API_BASE_URL=http://localhost:8000
+    networks:
+      - app
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=16m
+      - /var/run:rw,noexec,nosuid,nodev,size=1m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+networks:
+  app:
+  sandbox-control:
+    internal: true

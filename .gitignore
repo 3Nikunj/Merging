@@ -1,0 +1,58 @@
+# Environment files and local secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node and frontend builds
+node_modules/
+dist/
+dist-ssr/
+build/
+coverage/
+.vite/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs, caches, and temporary files
+*.log
+logs/
+.cache/
+cache/
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*~

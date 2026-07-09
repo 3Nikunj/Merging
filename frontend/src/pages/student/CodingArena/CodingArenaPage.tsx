@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { codingProblem } from "../../../data/testFlow";
 import Sidebar from "../../../components/student/layout/Sidebar";
 import { api, type RunCodeResponse } from "../../../services/api";
-import { supabase } from "../../../services/supabase";
 
 type RunStatus = RunCodeResponse["status"] | "idle" | "running" | "submitting";
 type ConsoleTab = "Testcase" | "Result" | "Submissions";
@@ -25,20 +24,20 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  ACCEPTED: "✓ Accepted",
-  accepted: "✓ Accepted",
-  WRONG_ANSWER: "✗ Wrong Answer",
-  wrong_answer: "✗ Wrong Answer",
-  RUNTIME_ERROR: "✗ Runtime Error",
-  runtime_error: "✗ Runtime Error",
-  COMPILE_ERROR: "✗ Compile Error",
-  compile_error: "✗ Compile Error",
-  TIMEOUT: "⏱ Time Limit Exceeded",
-  timeout: "⏱ Time Limit Exceeded",
+  ACCEPTED: "Accepted",
+  accepted: "Accepted",
+  WRONG_ANSWER: "Wrong Answer",
+  wrong_answer: "Wrong Answer",
+  RUNTIME_ERROR: "Runtime Error",
+  runtime_error: "Runtime Error",
+  COMPILE_ERROR: "Compile Error",
+  compile_error: "Compile Error",
+  TIMEOUT: "Time Limit Exceeded",
+  timeout: "Time Limit Exceeded",
   NO_TESTS: "No test cases available",
   idle: "Run your code to see results",
-  running: "Running…",
-  submitting: "Submitting…",
+  running: "Running...",
+  submitting: "Submitting...",
 };
 
 const DEFAULT_CODE = `class Solution:
@@ -80,17 +79,9 @@ function CodingArenaPage() {
   const [runResult, setRunResult] = useState<RunCodeResponse | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [submissionsError, setSubmissionsError] = useState(false);
   const [selectedSubmissionForView, setSelectedSubmissionForView] = useState<SubmissionRow | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Load the current user ID once on mount
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.id) setUserId(user.id);
-    });
-  }, []);
 
   const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab") {
@@ -125,11 +116,11 @@ function CodingArenaPage() {
     }
   };
 
-  const fetchSubmissions = async (uid: string) => {
+  const fetchSubmissions = async () => {
     setLoadingSubmissions(true);
     setSubmissionsError(false);
     try {
-      const data = await api.getCodingSubmissions(uid, codingProblem.id);
+      const data = await api.getCodingSubmissions(codingProblem.id);
       setSubmissions(data.submissions);
     } catch {
       setSubmissionsError(true);
@@ -139,11 +130,10 @@ function CodingArenaPage() {
   };
 
   const submitCode = async () => {
-    if (!userId) return;
     setRunStatus("submitting");
     setActiveTab("Result");
     try {
-      const result = await api.submitCode(codingProblem.id, code, userId);
+      const result = await api.submitCode(codingProblem.id, code);
       // Always update the result display regardless of what happens next
       setRunResult(result);
       setRunStatus(result.status);
@@ -158,13 +148,13 @@ function CodingArenaPage() {
       setRunStatus("RUNTIME_ERROR");
     }
     // Refresh submissions list non-blockingly
-    fetchSubmissions(userId).catch(() => undefined);
+    fetchSubmissions().catch(() => undefined);
   };
 
   const handleTabClick = (tab: ConsoleTab) => {
     setActiveTab(tab);
-    if (tab === "Submissions" && userId) {
-      fetchSubmissions(userId);
+    if (tab === "Submissions") {
+      fetchSubmissions();
     }
   };
 
@@ -194,15 +184,15 @@ function CodingArenaPage() {
               disabled={isExecuting}
               className="rounded-lg border border-practice-ink px-5 py-2 text-sm font-bold text-practice-ink transition-all duration-200 hover:bg-practice-ink hover:text-white disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2"
             >
-              {runStatus === "running" ? "Running…" : "Run"}
+              {runStatus === "running" ? "Running..." : "Run"}
             </button>
             <button
               type="button"
               onClick={submitCode}
-              disabled={isExecuting || !userId}
+              disabled={isExecuting}
               className="rounded-lg bg-practice-ink px-5 py-2 text-sm font-bold text-white transition-all duration-200 hover:bg-practice-sidebarActive disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2"
             >
-              {runStatus === "submitting" ? "Submitting…" : "Submit"}
+              {runStatus === "submitting" ? "Submitting..." : "Submit"}
             </button>
           </div>
         </header>
@@ -424,7 +414,7 @@ function CodingArenaPage() {
       {/* Code details view modal */}
       {selectedSubmissionForView && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-practice-line bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="w-full max-w-2xl rounded-lg border border-practice-line bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <header className="flex items-center justify-between border-b border-practice-line bg-practice-muted/40 px-6 py-4">
               <div>
                 <h3 className="text-sm font-extrabold text-practice-ink">Submission Code Details</h3>
@@ -437,7 +427,7 @@ function CodingArenaPage() {
                 onClick={() => setSelectedSubmissionForView(null)}
                 className="text-practice-subdued hover:text-practice-ink font-bold text-base transition-colors"
               >
-                ✕
+                X
               </button>
             </header>
             

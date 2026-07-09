@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Clock3 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { liveQuestion, selectedTest } from "../../../data/testFlow";
 import { api } from "../../../services/api";
@@ -124,7 +125,7 @@ function LiveTestPage() {
           <p className="text-sm text-white/65">{selectedTest.title}</p>
         </div>
         <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-white/5 px-6 py-2 sm:flex">
-          <span className="text-practice-amber">T</span>
+          <Clock3 className="h-4 w-4 text-practice-amber" aria-hidden="true" />
           <span
             className={[
               "text-xl font-extrabold tracking-widest",
