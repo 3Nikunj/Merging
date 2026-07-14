@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routes import attempts, coding, health, hierarchy, practice_tests, recommendations
+from app.api.routes import attempts, coding, health, hierarchy, practice_tests, recommendations, ai_interviews
 from app.auth.dependency import require_role
 
 api_router = APIRouter()
@@ -34,4 +34,10 @@ api_router.include_router(
     tags=["coding"],
     dependencies=[Depends(require_role(["student", "admin"]))]
 )
+api_router.include_router(
+    ai_interviews.router,
+    prefix="/ai-interviews",
+    tags=["ai-interviews"]
+)
+
 

@@ -13,6 +13,9 @@ import PlaceholderPage from "./pages/student/PlaceholderPage";
 import ResultsPage from "./pages/student/Results/ResultsPage";
 import TestInstructionsPage from "./pages/student/TestInstructions/TestInstructionsPage";
 import TestSelectionPage from "./pages/student/TestSelection/TestSelectionPage";
+import AiInterviewDashboard from "./pages/student/AiInterview/AiInterviewDashboard";
+import AiInterviewRoom from "./pages/student/AiInterview/AiInterviewRoom";
+import AiInterviewReport from "./pages/student/AiInterview/AiInterviewReport";
 
 // Admin Pages
 import { OverviewPage } from "./pages/admin/OverviewPage";
@@ -58,7 +61,9 @@ function App() {
           path="/company-simulation"
           element={<PlaceholderPage title="Company Simulation" />}
         />
-        <Route path="/ai-interview" element={<PlaceholderPage title="AI Interview" />} />
+        <Route path="/ai-interview" element={<AiInterviewDashboard />} />
+        <Route path="/ai-interview/live/:sessionId" element={<AiInterviewRoom />} />
+        <Route path="/ai-interview/report/:sessionId" element={<AiInterviewReport />} />
         <Route path="/contests" element={<PlaceholderPage title="Contests" />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/profile" element={<PlaceholderPage title="Profile" />} />

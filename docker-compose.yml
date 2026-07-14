@@ -9,7 +9,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
-      - APP_ENV=production
+      - APP_ENV=${APP_ENV:-development}
       - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:?Set FRONTEND_ORIGINS to the HTTPS frontend origin list}
       - SUPABASE_URL=${SUPABASE_URL:?Set SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY}
@@ -21,6 +21,8 @@ services:
       - sandbox-control
     depends_on:
       sandbox-executor:
+        condition: service_started
+      kokoro-tts:
         condition: service_started
     restart: unless-stopped
     read_only: true
@@ -75,6 +77,15 @@ services:
       - no-new-privileges:true
     pids_limit: 64
     mem_limit: 128m
+
+  kokoro-tts:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: aivalytics-kokoro-tts
+    ports:
+      - "${KOKORO_PORT:-8880}:8000"
+    networks:
+      - app
+    restart: unless-stopped
 
   frontend:
     build:

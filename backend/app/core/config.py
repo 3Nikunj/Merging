@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         min_length=1,
         alias="SUPABASE_SERVICE_ROLE_KEY",
     )
+    groq_api_key: SecretStr | None = Field(default=None, alias="GROQ_API_KEY")
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
     sandbox_executor_url: str | None = Field(
         default=None,

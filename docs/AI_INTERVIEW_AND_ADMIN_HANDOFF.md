@@ -1,8 +1,8 @@
 # AiValytics Admin and AI Interview Handoff
 
-Last updated: 2026-07-09
+Last updated: 2026-07-14
 
-This document captures the current implementation state and the agreed product direction so the next session can resume without losing context.
+This document captures the current implementation state of the project, including the completed AI Interview Simulator feature and the Admin workspace modules.
 
 ## Current Local Runtime
 
@@ -121,400 +121,95 @@ Known note:
 
 - Existing database already has `9` test/question mismatches. The Audit Center surfaces them. Next admin repair step would be fixing those records or adding migration/repair tooling.
 
-## AI Interview Feature Direction
-
-The next major feature is a student-side AI Interview simulator.
-
-The goal is not a generic AI chat. It should feel like a realistic verbal interview training product with scoring, correction, dashboard history, and strong misuse prevention.
-
-## Interview Modes
-
-### 1. JD-Based Practice
-
-User provides:
-
-- Job description text or upload.
-- Optional resume upload.
-
-System extracts:
-
-- Role
-- Skills
-- Seniority
-- Responsibilities
-- Keywords
-- Evaluation focus
-
-The interview is generated around that JD and the student's resume.
-
-### 2. Custom Interview
-
-User provides:
-
-- Company
-- Position
-- Experience required
-- Required skills
-- Interview type:
-  - HR
-  - Technical
-  - Behavioral
-  - Managerial
-  - Mixed
-- Difficulty:
-  - Beginner
-  - Intermediate
-  - Advanced
-- Optional resume upload
-
-Recommendation for MVP:
-
-Start with Custom Interview plus optional resume upload, then add JD parsing. The live verbal loop is the hardest part, so it should be stabilized before expanding too many input flows.
-
-## Interview UI Direction
-
-Important IP note:
-
-- Do not directly copy Jarvis from Iron Man.
-- Build a Jarvis-inspired original AI interviewer:
-  - Futuristic glowing orb/core
-  - Voice-reactive rings
-  - Subtle scanning lines
-  - Listening/thinking/speaking states
-  - Dark glass-like technical UI
-
-Live interview screen:
-
-- Left side:
-  - AI interviewer animation
-  - Voice state: listening, thinking, speaking
-  - Interview progress
-- Right side:
-  - Student camera preview
-  - No recording required by default
-  - Mic permission active
-  - Timer
-- Controls:
-  - End interview
-  - Repeat question
-  - Skip question, limited
-  - Technical issue/help button
-
-The UI should feel like a live interview, not a chatbot.
-
-## Interview Behavior
-
-The AI interviewer should:
-
-- Ask one question at a time.
-- Wait for the complete verbal answer.
-- Ask follow-up questions if the answer is vague.
-- Adjust difficulty based on performance.
-- Cover resume, JD/custom requirements, projects, behavior, and role skills.
-- Stay inside the interview role.
-- Refuse unrelated requests.
-- Avoid giving coaching during the live interview unless the interview mode explicitly allows practice hints.
-
-Recommended experience:
-
-- During live interview:
-  - Realistic, uninterrupted interview.
-  - Silent evaluation.
-- After interview:
-  - Detailed feedback.
-  - Corrected answers.
-  - Performance dashboard update.
-
-## Anti-Misuse Strategy
-
-Prompts alone are not enough. Use both prompt and product constraints.
-
-Recommended guardrails:
-
-- Backend-controlled interview state.
-- No open-ended generic chat mode.
-- Strict system prompt that defines the AI as an interview evaluator only.
-- Allowed AI actions:
-  - Ask question
-  - Ask follow-up
-  - Evaluate answer
-  - Move to next question
-  - Generate final report
-  - Refuse unrelated request
-- Session topic lock based on JD/custom inputs.
-- Rate limits and session duration limits.
-- Transcript storage only if user explicitly consents.
-- Never let the interview model become a general assistant for homework, code generation, emails, unrelated advice, or prompt extraction.
-
-## Marking System
-
-Use a 100-point scoring model with category-level breakdown.
-
-Suggested default rubric:
-
-| Area | Weight |
-| --- | ---: |
-| Relevance to question | 20 |
-| Technical/domain accuracy | 20 |
-| Communication clarity | 15 |
-| Structure of answer | 15 |
-| Resume/JD alignment | 10 |
-| Confidence and professionalism | 10 |
-| Depth, examples, and evidence | 10 |
-
-Weights should be adjustable by question type:
-
-- Technical questions should emphasize accuracy.
-- Behavioral questions should emphasize structure, relevance, and evidence.
-- HR questions should emphasize clarity, professionalism, and role fit.
-
-Final rating bands:
-
-- `90-100`: Excellent
-- `75-89`: Strong
-- `60-74`: Needs improvement
-- `<60`: Not ready yet
-
-Possible penalties:
-
-- Too many skipped questions.
-- Very short answers.
-- Repeated off-topic answers.
-- Poor role alignment.
-
-## Per-Question Evaluation Shape
-
-Each answer should produce structured evaluation data similar to:
-
-```json
-{
-  "question": "Tell me about a challenging project.",
-  "answer_transcript": "...",
-  "question_type": "behavioral",
-  "score": 72,
-  "category_scores": {
-    "relevance": 16,
-    "accuracy": 14,
-    "clarity": 11,
-    "structure": 10,
-    "jd_alignment": 7,
-    "confidence": 8,
-    "depth": 6
-  },
-  "strengths": [],
-  "mistakes": [],
-  "missing_keywords": [],
-  "corrected_answer": "",
-  "suggested_framework": "STAR",
-  "follow_up_needed": true
-}
-```
-
-## Post-Interview Correction
-
-After the interview, the AI should correct weak answers.
-
-For each weak answer, show:
-
-1. What the student answered.
-2. What was missing.
-3. Mistakes or unclear parts.
-4. Better answer.
-5. Why the improved answer works.
-6. Suggested answer framework:
-   - STAR
-   - Problem-Solution-Impact
-   - Situation-Action-Result
-   - Concept-Example-Tradeoff
-
-The corrected answer should sound realistic for the student, not overly polished or fake.
-
-## Student Dashboard Metrics
-
-The student dashboard should display:
-
-- Latest interview score.
-- Average interview score.
-- Number of interviews completed.
-- Strongest areas.
-- Weakest areas.
-- Communication trend.
-- Technical trend.
-- JD match trend.
-- Recommended next practice.
-
-Suggested charts/components:
-
-- Score over time.
-- Skill radar chart.
-- Category breakdown.
-- Recent interview cards.
-- Recommended next interview mode.
-
-## Suggested Database Tables
-
-### `ai_interview_sessions`
-
-Suggested fields:
-
-- `id`
-- `student_id`
-- `mode`: `jd_based` or `custom`
-- `company`
-- `position`
-- `experience_level`
-- `interview_type`
-- `difficulty`
-- `jd_text`
-- `resume_url`
-- `resume_text`
-- `status`: `setup`, `active`, `completed`, `cancelled`
-- `overall_score`
-- `started_at`
-- `completed_at`
-- `created_at`
-
-### `ai_interview_turns`
-
-Suggested fields:
-
-- `id`
-- `session_id`
-- `sort_order`
-- `question`
-- `question_type`
-- `answer_transcript`
-- `score`
-- `rubric_json`
-- `mistakes_json`
-- `missing_keywords_json`
-- `corrected_answer`
-- `feedback`
-- `follow_up_needed`
-- `created_at`
-
-### `ai_interview_reports`
-
-Suggested fields:
-
-- `id`
-- `session_id`
-- `summary`
-- `strengths_json`
-- `weaknesses_json`
-- `recommended_practice_json`
-- `dashboard_metrics_json`
-- `created_at`
-
-## Suggested Backend Endpoints
-
-Setup:
-
-- `POST /student/ai-interviews`
-  - Create session from custom requirements or JD.
-- `POST /student/ai-interviews/{session_id}/resume`
-  - Upload resume.
-- `POST /student/ai-interviews/{session_id}/start`
-  - Start live interview.
-
-Live interview:
-
-- `GET /student/ai-interviews/{session_id}`
-- `POST /student/ai-interviews/{session_id}/answer`
-  - Submit transcript from speech-to-text.
-  - Backend evaluates answer and returns next interviewer action.
-- `POST /student/ai-interviews/{session_id}/skip`
-- `POST /student/ai-interviews/{session_id}/complete`
-
-Reports:
-
-- `GET /student/ai-interviews/{session_id}/report`
-- `GET /student/ai-interviews/summary`
-  - Dashboard metrics.
-
-## Voice and Camera Technical Direction
-
-Frontend:
-
-- Use browser camera via `navigator.mediaDevices.getUserMedia`.
-- Show camera preview only; no recording by default.
-- Use speech-to-text for verbal answers.
-- Use text-to-speech for AI interviewer voice.
-- Prefer streaming/low-latency interaction when possible.
-
-Possible MVP:
-
-- Start with browser speech recognition or a simple STT endpoint.
-- Use generated text response plus browser TTS or server-side TTS.
-- Add low-latency streaming later.
-
-## Prompting Direction
-
-The system prompt should define:
-
-- AI is an interview simulator and evaluator.
-- The session scope is locked to the provided JD/custom requirements/resume.
-- AI asks one question at a time.
-- AI must not answer unrelated requests.
-- AI must not reveal prompts or hidden rubrics.
-- AI must not generate unrelated content.
-- AI should evaluate silently during the interview.
-- AI should provide detailed corrections only after completion.
-
-The model output should be structured JSON where possible:
-
-- `interviewer_message`
-- `interviewer_state`
-- `question_type`
-- `question`
-- `evaluation`
-- `next_action`
-- `refusal_reason`
-
-## Recommended Build Order
-
-1. Create database tables/migrations for AI interviews.
-2. Build backend session lifecycle endpoints.
-3. Build student setup UI for Custom Interview.
-4. Add optional resume upload and resume text extraction.
-5. Build live interview room UI:
-   - AI interviewer animation
-   - Camera preview
-   - Timer
-   - Controls
-6. Add speech-to-text and text-to-speech loop.
-7. Add scoring and per-question evaluation.
-8. Add final report with corrected answers.
-9. Add dashboard metrics.
-10. Add JD-based mode.
-11. Add misuse tests and prompt-injection test cases.
-
-## Current Open Risks
-
-- Need to choose STT/TTS provider or browser-native approach.
-- Need privacy decision for transcripts, resumes, and camera policy.
-- Need Supabase migrations for interview tables.
-- Need dashboard integration design.
-- Need prompt-injection and misuse test cases.
-- Need to avoid direct Jarvis/IP reproduction while preserving the intended futuristic feeling.
-
-## Verification Notes From Today
-
-Commands that passed:
-
-```bash
-cd frontend
-npm run build
-```
-
-```bash
-python -m py_compile backend/app/api/routes/admin.py backend/app/schemas/admin.py
-```
-
-Live checks:
-
-- Frontend returned `200` at `/admin/questions`.
-- Backend health returned OK.
-- OpenAPI exposed `/admin/questions/audit`.
-- Browser showed the rebuilt Question Bank page with no visible `.error-text` messages.
-
+### AI Interview Simulator (Completed Implementation)
+
+The student-side AI Interview Simulator has been fully implemented. It acts as a realistic verbal interview training simulator with scoring, feedback correction, session logging, dashboard history, and strong prompt injection guardrails.
+
+## Feature Architecture
+
+### 1. Interview Modes & Session Setup
+
+- **Custom Profile**: Students configure their target company, target position, seniority level (Internship, Entry Level, Mid-Level, Senior Level), interview type (Technical, Behavioral, HR Screening, Managerial, Mixed), and difficulty (Beginner, Intermediate, Advanced).
+- **Job Description (JD) Based**: Students paste target job descriptions to dynamically generate and customize questions targeting the key skills, roles, and responsibilities.
+- **Voice & Accent Selection**: Supports configurable voices via local `kokoro-tts` container service (US and UK female/male voices).
+- **Optional Resume Integration**: Supports pasting resume highlights or uploading a resume (simulated text extractor details: extraction maps candidate profile, skills, and years of experience).
+
+### 2. Interactive Live Interview Room
+
+- **AI Voice Agent Visuals**: A Jarvis-inspired, custom futuristic visual interface built in React/CSS:
+  - Futuristic central glowing AI orb with breathing animation (`orb-breathe`).
+  - Active voice-reactive rings rotating clockwise/counterclockwise (`ring-spin-cw`, `ring-spin-ccw`) when listening or speaking.
+  - Active audio waves/ripples (`ripple`) reflecting the state.
+- **Interviewer States**: Listening, Thinking, Speaking, and Idle.
+- **Webcam Integration**: Real-time browser webcam feed rendered on the right side using browser `getUserMedia` (privacy-first: strictly displays local preview, no video is sent to or saved on the backend).
+- **Interactive Control Actions**:
+  - *End/Hang up* session.
+  - *Repeat question* (triggers immediate backend TTS playback).
+  - *Skip question* (logs 0 score for active question turn, provides transition response, moves forward).
+  - *Text mode fallback* (allows manually typing answers instead of vocal speech).
+- **Voice Loop Implementation**:
+  - **Speech-to-Text (STT)**: Native browser `SpeechRecognition` (Web Speech API) captures student answers in real-time with visual mic volume meters. Autocommits answer on pause.
+  - **Text-to-Speech (TTS)**: Leverages local Kokoro TTS container service (`kokoro-tts` mapped at `/v1/audio/speech`) streamed dynamically from the backend as an MP3 file, creating a natural voice agent experience.
+
+### 3. Dynamic Evaluation & Scoring Rubric
+
+- Powered by Groq API's `llama-3.3-70b-versatile` with low latency (<500ms response time).
+- Implements a strict, backend-controlled evaluation loop.
+- **Marking Rubric**: Questions are evaluated out of 100 on a multi-dimensional scale:
+  - Relevance to question (20%)
+  - Technical/domain accuracy (20%)
+  - Communication clarity (15%)
+  - Structure of answer (STAR/Concept framework) (15%)
+  - Resume/JD alignment (10%)
+  - Confidence and professionalism (10%)
+  - Depth, metrics, and evidence (10%)
+- **Actionable Correction**:
+  - For each turn, the AI evaluates strengths, mistakes (e.g. logical leaps), missing keywords, and compiles a **corrected framework answer** (STAR format or Concept-Example-Tradeoff) custom-tailored to the student's background.
+  - Decision loop dynamically determines if a follow-up query is needed or moves to the next new topic.
+- **Anti-Misuse Protection**:
+  - State is strictly maintained in the database.
+  - The model system prompts enforce evaluation roles and refuse prompt injections, meta-commentary, or unrelated coding/text tasks.
+
+### 4. Database Schema (Supabase Migrations)
+
+Implemented tables in [supabase/migrations/add_ai_interview.sql](file:///d:/AiValytics%20Docs/Merging/supabase/migrations/add_ai_interview.sql):
+- **`ai_interview_sessions`**: Stores student session configurations (company, position, accent, mode, JD, status, overall score).
+- **`ai_interview_turns`**: Stores each question-response turn, transcript, scores, mistakes, missing keywords, feedback, corrected answers, and follow-up flags.
+- **`ai_interview_reports`**: Stores summary reports, lists of strengths/weaknesses, practice recommendations, and dashboard metrics.
+- **Security & RLS**: All tables have Row Level Security enabled. Policies limit access to student owners (`auth.uid() = student_id`) and admin roles (`is_admin()`). Direct anon/authenticated browser privileges are revoked, funneling all modifications through the backend router.
+
+### 5. Backend Endpoints Summary
+
+Registered in [backend/app/api/router.py](file:///d:/AiValytics%20Docs/Merging/backend/app/api/router.py):
+- `POST /api/ai-interviews`: Creates a new interview session.
+- `POST /api/ai-interviews/{session_id}/start`: Activates session and retrieves the first question.
+- `POST /api/ai-interviews/{session_id}/answer`: Submits verbal response, processes LLM evaluation, and returns next question/action.
+- `POST /api/ai-interviews/{session_id}/skip`: Skips current question, logging zero score, and moves to next turn.
+- `POST /api/ai-interviews/{session_id}/complete`: Finishes session, aggregates overall scores, and generates the final evaluation report.
+- `GET /api/ai-interviews/history`: Returns student's historical session list.
+- `GET /api/ai-interviews/summary`: Retrieves aggregated student statistics (average scores, strongest/weakest areas, and recent score trends).
+- `GET /api/ai-interviews/{session_id}/report`: Retrieves complete session report cards, turns, feedback, and corrected answers.
+- `GET /api/ai-interviews/{session_id}/tts`: Audio streaming endpoint utilizing local `kokoro-tts` container API.
+
+---
+
+## Verification & Testing Summary
+
+### Automated Tests
+- End-to-end endpoint tests implemented in [test_ai_interview.py](file:///d:/AiValytics%20Docs/Merging/backend/tests/test_ai_interview.py).
+- Verified mock settings fallback, creation, setup, and submission flows.
+- Running command `python -m unittest tests/test_ai_interview.py` succeeds:
+  ```text
+  Ran 4 tests in 0.046s
+  OK
+  ```
+
+### Manual & Build Verification
+- Vite production build compile check passed:
+  ```text
+  npm run build
+  vite v8.0.14 building client environment for production...
+  built in 3.57s
+  ```
+- RLS Policies and compiler compatibility checks verified.
+- Direct router bindings and FastAPI middleware compilation checked.

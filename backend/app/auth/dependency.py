@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase_auth.types import User
+from gotrue.types import User
 
 from app.core.supabase import get_supabase_client
 

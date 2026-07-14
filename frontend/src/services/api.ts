@@ -72,6 +72,89 @@ export interface RunCodeResponse {
   totalTests: number;
 }
 
+export interface AiInterviewSession {
+  id: string;
+  studentId: string;
+  mode: "jd_based" | "custom";
+  company?: string;
+  position?: string;
+  experienceLevel?: string;
+  interviewType?: string;
+  difficulty?: string;
+  status: "setup" | "active" | "completed" | "cancelled";
+  voiceAccent?: string;
+  overallScore?: number;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface AiInterviewAction {
+  status: "active" | "completed";
+  interviewerMessage: string;
+  questionType?: string;
+  score?: number;
+  feedback?: string;
+  rubric?: Record<string, number>;
+  mistakes?: string[];
+  missingKeywords?: string[];
+  correctedAnswer?: string;
+  followUpNeeded: boolean;
+}
+
+export interface AiInterviewTurn {
+  id: string;
+  sortOrder: number;
+  question: string;
+  questionType?: string;
+  answerTranscript?: string;
+  score?: number;
+  rubric: Record<string, number>;
+  mistakes: string[];
+  missingKeywords: string[];
+  correctedAnswer?: string;
+  feedback?: string;
+  followUpNeeded: boolean;
+  createdAt: string;
+}
+
+export interface AiInterviewReport {
+  sessionId: string;
+  summary?: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendedPractice: Array<{ topic: string; reason: string }>;
+  dashboardMetrics: Record<string, number>;
+  turns: AiInterviewTurn[];
+  overallScore?: number;
+}
+
+export interface AiInterviewHistoryItem {
+  id: string;
+  mode: "jd_based" | "custom";
+  company?: string;
+  position?: string;
+  interviewType?: string;
+  difficulty?: string;
+  status: string;
+  overallScore?: number;
+  createdAt: string;
+}
+
+export interface AiInterviewSummary {
+  averageScore: number;
+  totalCompleted: number;
+  weakestArea: string;
+  strongestArea: string;
+  recentScores: Array<{
+    id: string;
+    date: string;
+    score: number;
+    position: string;
+    company: string;
+  }>;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -187,3 +270,51 @@ api.getCodingSubmissions = (problemId?: string) =>
   }>(
     `/api/coding/submissions${problemId ? `?problem_id=${problemId}` : ""}`
   );
+
+// AI Interview Methods
+api.createInterviewSession = (payload: {
+  mode: "jd_based" | "custom";
+  company?: string;
+  position?: string;
+  experience_level?: string;
+  interview_type?: string;
+  difficulty?: string;
+  jd_text?: string;
+  resume_text?: string;
+  voiceAccent?: string;
+}) =>
+  api<AiInterviewSession>("/api/ai-interviews", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+api.startInterviewSession = (sessionId: string) =>
+  api<AiInterviewAction>(`/api/ai-interviews/${sessionId}/start`, {
+    method: "POST",
+  });
+
+api.submitInterviewAnswer = (sessionId: string, answerTranscript: string) =>
+  api<AiInterviewAction>(`/api/ai-interviews/${sessionId}/answer`, {
+    method: "POST",
+    body: JSON.stringify({ answerTranscript }),
+  });
+
+api.skipInterviewQuestion = (sessionId: string) =>
+  api<AiInterviewAction>(`/api/ai-interviews/${sessionId}/skip`, {
+    method: "POST",
+  });
+
+api.completeInterviewSession = (sessionId: string) =>
+  api<AiInterviewAction>(`/api/ai-interviews/${sessionId}/complete`, {
+    method: "POST",
+  });
+
+api.getInterviewReport = (sessionId: string) =>
+  api<AiInterviewReport>(`/api/ai-interviews/${sessionId}/report`);
+
+api.getInterviewHistory = () =>
+  api<AiInterviewHistoryItem[]>("/api/ai-interviews/history");
+
+api.getInterviewSummary = () =>
+  api<AiInterviewSummary>("/api/ai-interviews/summary");
+
