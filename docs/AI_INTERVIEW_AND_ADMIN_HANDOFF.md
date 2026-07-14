@@ -131,7 +131,7 @@ The student-side AI Interview Simulator has been fully implemented. It acts as a
 
 - **Custom Profile**: Students configure their target company, target position, seniority level (Internship, Entry Level, Mid-Level, Senior Level), interview type (Technical, Behavioral, HR Screening, Managerial, Mixed), and difficulty (Beginner, Intermediate, Advanced).
 - **Job Description (JD) Based**: Students paste target job descriptions to dynamically generate and customize questions targeting the key skills, roles, and responsibilities.
-- **Voice & Accent Selection**: Supports configurable voices via local `kokoro-tts` container service (US and UK female/male voices).
+- **Voice & Accent Selection**: Dynamically maps configuration options (British/US, Male/Female) to the user's local browser OS English voices.
 - **Optional Resume Integration**: Supports pasting resume highlights or uploading a resume (simulated text extractor details: extraction maps candidate profile, skills, and years of experience).
 
 ### 2. Interactive Live Interview Room
@@ -149,7 +149,7 @@ The student-side AI Interview Simulator has been fully implemented. It acts as a
   - *Text mode fallback* (allows manually typing answers instead of vocal speech).
 - **Voice Loop Implementation**:
   - **Speech-to-Text (STT)**: Native browser `SpeechRecognition` (Web Speech API) captures student answers in real-time with visual mic volume meters. Autocommits answer on pause.
-  - **Text-to-Speech (TTS)**: Leverages local Kokoro TTS container service (`kokoro-tts` mapped at `/v1/audio/speech`) streamed dynamically from the backend as an MP3 file, creating a natural voice agent experience.
+  - **Text-to-Speech (TTS)**: Native browser `SpeechSynthesis` API utilizing candidate's OS voice engines (Microsoft, Google, Apple) with 0ms server latency and gapless paragraph playback.
 
 ### 3. Dynamic Evaluation & Scoring Rubric
 
@@ -189,7 +189,6 @@ Registered in [backend/app/api/router.py](file:///d:/AiValytics%20Docs/Merging/b
 - `GET /api/ai-interviews/history`: Returns student's historical session list.
 - `GET /api/ai-interviews/summary`: Retrieves aggregated student statistics (average scores, strongest/weakest areas, and recent score trends).
 - `GET /api/ai-interviews/{session_id}/report`: Retrieves complete session report cards, turns, feedback, and corrected answers.
-- `GET /api/ai-interviews/{session_id}/tts`: Audio streaming endpoint utilizing local `kokoro-tts` container API.
 
 ---
 
