@@ -117,37 +117,6 @@ class AiInterviewService:
             raise HTTPException(status_code=500, detail="Failed to create interview session")
         return AiInterviewSessionResponse.model_validate(response.data[0])
 
-    async def generate_speech(self, text: str, voice_accent: str):
-        # Map voice_accent if empty or if containing old Edge-TTS names
-        voice = voice_accent or "af_heart"
-        if "Jenny" in voice or "Guy" in voice or "en-US" in voice:
-            voice = "af_heart"
-        elif "Neerja" in voice or "Prabhat" in voice or "en-IN" in voice:
-            voice = "af_heart"
-        elif "Sonia" in voice or "Ryan" in voice or "en-GB" in voice:
-            voice = "bf_emma"
-        elif "Natasha" in voice or "en-AU" in voice:
-            voice = "af_sky"
-
-        url = "http://kokoro-tts:8880/v1/audio/speech"
-        payload = {
-            "model": "kokoro",
-            "input": text,
-            "voice": voice,
-            "response_format": "mp3",
-            "stream": True
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream("POST", url, json=payload) as response:
-                    response.raise_for_status()
-                    async for chunk in response.aiter_bytes():
-                        yield chunk
-        except Exception as e:
-            logger.error(f"Error communicating with Kokoro TTS container: {e}")
-            raise
-
     def start_session(self, session_id: str, student_id: str) -> AiInterviewActionResponse:
         # Fetch session info
         session = self._get_session_by_id(session_id, student_id)

@@ -79,29 +79,7 @@ def get_report(
 ) -> AiInterviewReportResponse:
     return ai_interview_service.get_report(session_id, current_user_id)
 
-@router.get("/{session_id}/tts")
-async def stream_tts(
-    session_id: str,
-    text: str,
-):
-    session = ai_interview_service._get_session_by_id_public(session_id)
-    voice_accent = session.get("voice_accent", "af_heart")
-    return StreamingResponse(
-        ai_interview_service.generate_speech(text, voice_accent),
-        media_type="audio/mpeg"
-    )
 
-async def stream_tts_ws(websocket: WebSocket, text: str, voice_accent: str):
-    try:
-        audio_data = bytearray()
-        async for chunk in ai_interview_service.generate_speech(text, voice_accent):
-            audio_data.extend(chunk)
-            
-        if audio_data:
-            await websocket.send_json({"type": "status", "status": "speaking"})
-            await websocket.send_bytes(bytes(audio_data))
-    except Exception as e:
-        logger.error(f"Error in stream_tts_ws: {e}")
 
 async def evaluate_and_save_turn(session: dict, turns: list[dict], turn_id: str, answer_text: str):
     try:
@@ -169,6 +147,10 @@ async def ws_interview(
             
             if msg_type == "start":
                 session = ai_interview_service._get_session_by_id(session_id, student_id)
+                await websocket.send_json({
+                    "type": "session_info",
+                    "voice_accent": session.get("voice_accent", "af_heart")
+                })
                 turns_res = ai_interview_service.client.table("ai_interview_turns").select("*").eq("session_id", session_id).order("sort_order").execute()
                 turns = turns_res.data or []
                 
@@ -178,7 +160,6 @@ async def ws_interview(
                         "type": "question",
                         "text": active_q
                     })
-                    await stream_tts_ws(websocket, active_q, session.get("voice_accent", "af_heart"))
                 else:
                     await websocket.send_json({"type": "status", "status": "thinking"})
                     
@@ -194,24 +175,12 @@ async def ws_interview(
                     messages = [{"role": "user", "content": prompt}]
                     
                     full_q = ""
-                    sentence_buffer = ""
                     async for token_chunk in ai_interview_service._call_groq_stream(messages):
                         full_q += token_chunk
-                        sentence_buffer += token_chunk
                         await websocket.send_json({
                             "type": "text_delta",
                             "text": token_chunk
                         })
-                        
-                        if any(p in token_chunk for p in [".", "?", "!"]) or (len(sentence_buffer) > 60 and any(p in token_chunk for p in [",", ";"])):
-                            clause = sentence_buffer.strip()
-                            if clause:
-                                await stream_tts_ws(websocket, clause, session.get("voice_accent", "af_heart"))
-                            sentence_buffer = ""
-                    
-                    remaining = sentence_buffer.strip()
-                    if remaining:
-                        await stream_tts_ws(websocket, remaining, session.get("voice_accent", "af_heart"))
                     
                     next_turn_row = {
                         "session_id": session_id,
@@ -268,24 +237,12 @@ async def ws_interview(
                     messages = [{"role": "user", "content": prompt}]
                     
                     full_q = ""
-                    sentence_buffer = ""
                     async for token_chunk in ai_interview_service._call_groq_stream(messages):
                         full_q += token_chunk
-                        sentence_buffer += token_chunk
                         await websocket.send_json({
                             "type": "text_delta",
                             "text": token_chunk
                         })
-                        
-                        if any(p in token_chunk for p in [".", "?", "!"]) or (len(sentence_buffer) > 60 and any(p in token_chunk for p in [",", ";"])):
-                            clause = sentence_buffer.strip()
-                            if clause:
-                                await stream_tts_ws(websocket, clause, session.get("voice_accent", "af_heart"))
-                            sentence_buffer = ""
-                    
-                    remaining = sentence_buffer.strip()
-                    if remaining:
-                        await stream_tts_ws(websocket, remaining, session.get("voice_accent", "af_heart"))
                     
                     next_sort_order = current_turn["sort_order"] + 1
                     next_turn_row = {

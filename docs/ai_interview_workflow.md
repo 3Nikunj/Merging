@@ -1,6 +1,6 @@
 # AI Verbal Interview Workflow System
 
-This document outlines the step-by-step architecture and communication flows for the AI Verbal Interview Simulator, mapping how the **Frontend**, **Backend (FastAPI)**, **Supabase DB**, **Groq LLM (LLama-3)**, and **Kokoro TTS (CPU)** services interact.
+This document outlines the step-by-step architecture and communication flows for the AI Verbal Interview Simulator, mapping how the **Frontend**, **Backend (FastAPI)**, **Supabase DB**, and **Groq LLM (LLama-3)** services interact.
 
 ---
 
@@ -13,41 +13,37 @@ graph TD
     classDef database fill:#6366f1,stroke:#4f46e5,color:#fff
     classDef ai fill:#f59e0b,stroke:#d97706,color:#fff
 
-    subgraph FE [React Frontend]
+    subgraph FE [Candidate Browser]
         Dash[Dashboard / Setup]:::frontend
         Room[Interview Live Room]:::frontend
         Report[Report Dashboard]:::frontend
+        SpeechSynth[Web Speech API SpeechSynthesis]:::frontend
     end
 
     subgraph BE [FastAPI Backend]
-        API[Interview Router]:::backend
+        API[Interview Router & WebSocket]:::backend
         Svc[AI Interview Service]:::backend
     end
 
     subgraph External [Services]
         DB[(Supabase Database)]:::database
         LLM[Groq LLM API]:::ai
-        TTS[Kokoro TTS Container]:::ai
     end
 
     Dash -->|1. Create Session| API
     API -->|Save Setup Session| DB
-    Room -->|2. Start Session| API
+    Room -->|2. Connect WebSocket| API
     API -->|Fetch Context & Prompt| Svc
-    Svc -->|3. Call LLM for 1st Q & Greeting| LLM
-    Svc -->|Save First Turn| DB
-    API -->|Return 1st Q Text| Room
-    Room -->|4. Play Audio Request| API
-    API -->|5. Stream Audio Chunks| TTS
-    TTS -->|6. Yield MP3 bytes| API
-    API -->|Audio stream| Room
-    Room -->|7. Submit Candidate Answer| API
-    API -->|8. Evaluate Turn & Draft Next Q| Svc
+    Svc -->|3. Call LLM for Question Stream| LLM
+    Svc -->|Save Turn| DB
+    API -->|4. Stream Text Delta Chunks| Room
+    Room -->|5. Synthesize Full Question| SpeechSynth
+    Room -->|6. Submit Candidate Answer| API
+    API -->|7. Evaluate Turn & Draft Next Q| Svc
     Svc -->|Score Turn metrics| LLM
     Svc -->|Save Turn Results| DB
-    API -->|Return Next Q Text| Room
-    Room -->|9. Complete Session| API
-    API -->|10. Generate Aggregate Report| Svc
+    Room -->|8. Complete Session| API
+    API -->|9. Generate Aggregate Report| Svc
     Svc -->|Analyze History & Rubrics| LLM
     Svc -->|Save Scorecard & Finish| DB
     API -->|Return Completion| Room
@@ -64,21 +60,21 @@ graph TD
 
 ### Phase B: Launch & Opening Greeting
 3. **Entering the Room**: The frontend routes to `/ai-interview/live/{session_id}`. On mount, it requests microphone/camera access.
-4. **Triggering the Interview**: The room calls `POST /api/ai-interviews/{session_id}/start`.
+4. **Triggering the Interview**: The room opens a persistent WebSocket connection to `ws://localhost:8000/api/ai-interviews/ws/{session_id}`.
 5. **Idempotent Checking**: 
    * If the session is already `'active'` (e.g. from page reload), the backend returns the current active question.
    * If `'setup'`, the backend updates the status to `'active'`, fetches candidate context (Resume, JD, difficulty), and prompts **Groq LLM** using the **Technical HR Recruiter System Prompt** to cordially greet the candidate and ask the first warm-up question.
 6. **First Question Storage**: The generated question is saved as the first record in the `ai_interview_turns` table with `sort_order = 1`.
-7. **Synthesis Playback**: The frontend splits the question into sentences and requests audio playback for each sentence sequentially via `GET /api/ai-interviews/{session_id}/tts?text=...`. The backend calls the `kokoro-tts` container, which streams the audio chunks back to the browser.
+7. **Synthesis Playback**: The backend streams the text tokens down the WebSocket channel. The frontend displays the letters on-screen in real-time. Once the stream ends, the frontend sends the full accumulated question text to the browser's native `window.speechSynthesis` API, playing it instantly without server request lag.
 
 ### Phase C: Active Turn Loop (5 Questions)
 8. **Candidate Response**: The candidate speaks into their microphone. The browser's native `SpeechRecognition` listener transcribes the speech to text. The candidate can also type their answer manually.
-9. **Submitting the Answer**: The frontend sends a `POST /api/ai-interviews/{session_id}/answer` with the transcribed text.
+9. **Submitting the Answer**: The frontend sends an `answer` frame via the WebSocket connection with the transcribed text.
 10. **Rubric Evaluation**:
     * The backend retrieves the current active question and candidates' answer.
     * It prompts the LLM to score the answer (0-100) across a **7-point technical/behavioral rubric**: *Relevance, Accuracy, Clarity, STAR Structure, JD Alignment, Confidence, and Depth*.
     * It determines if a follow-up is needed or prompts the next new question.
-    * If the question limit is not yet reached, it returns the next question text to the frontend.
+    * If the question limit is not yet reached, it streams the next question text to the frontend.
 11. **Turn Update**: The backend inserts the evaluated details (scores, mistakes, feedback) and saves the next question in the `ai_interview_turns` table.
 
 ### Phase D: Concluding & Scorecard Aggregation

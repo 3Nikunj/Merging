@@ -62,6 +62,7 @@ function AiInterviewRoom() {
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [textModeActive, setTextModeActive] = useState(false);
   const [manualAnswer, setManualAnswer] = useState("");
+  const [voiceAccent, setVoiceAccent] = useState("af_heart");
   
   // Media Devices States
   const [micActive, setMicActive] = useState(false);
@@ -74,11 +75,8 @@ function AiInterviewRoom() {
   const timerRef = useRef<any>(null);
   const speechVolumeIntervalRef = useRef<any>(null);
   const startedRef = useRef(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const audioQueueRef = useRef<string[]>([]);
-  const isPlayingRef = useRef<boolean>(false);
+  const sentenceBufferRef = useRef<string>("");
   
   // Live Voice volume indicators
   const [inputVolume, setInputVolume] = useState<number[]>(Array(10).fill(2));
@@ -125,9 +123,7 @@ function AiInterviewRoom() {
     }
     return () => {
       stopSpeechRecognition();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      window.speechSynthesis.cancel();
       if (wsRef.current) {
         wsRef.current.close(1000, "Component unmounted");
       }
@@ -179,14 +175,19 @@ function AiInterviewRoom() {
 
       ws.onmessage = async (event) => {
         if (event.data instanceof Blob) {
-          const audioUrl = URL.createObjectURL(event.data);
-          enqueueAudio(audioUrl);
+          console.warn("Received binary blob frame from backend, skipping");
         } else {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === "question") {
               setInterviewerMessage(msg.text);
               setSubmittingAnswer(false);
+              
+              const fullQuestion = sentenceBufferRef.current.trim() || msg.text;
+              sentenceBufferRef.current = "";
+              if (fullQuestion) {
+                speakQuestion(fullQuestion);
+              }
             } else if (msg.type === "text_delta") {
               setInterviewerMessage((prev) => {
                 if (
@@ -199,6 +200,11 @@ function AiInterviewRoom() {
                 }
                 return prev + msg.text;
               });
+
+              // Accumulate full text block
+              sentenceBufferRef.current += msg.text;
+            } else if (msg.type === "session_info") {
+              setVoiceAccent(msg.voice_accent);
             } else if (msg.type === "status") {
               setAiState(msg.status);
             } else if (msg.type === "complete") {
@@ -234,85 +240,13 @@ function AiInterviewRoom() {
     }
   };
 
-  const enqueueAudio = (audioUrl: string) => {
-    audioQueueRef.current.push(audioUrl);
-    if (!isPlayingRef.current) {
-      playNextInQueue();
-    }
-  };
-
-  const playNextInQueue = () => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setAiState("listening");
-      setLiveTranscription("");
-      if (micActive && !textModeActive) {
-        startSpeechRecognition();
-      }
-      return;
-    }
-
-    isPlayingRef.current = true;
-    setAiState("speaking");
+  // Text-To-Speech (TTS) voice trigger using OS-native SpeechSynthesis API
+  const speakQuestion = (text: string) => {
+    window.speechSynthesis.cancel();
     stopSpeechRecognition();
 
-    const nextUrl = audioQueueRef.current.shift()!;
-    const audio = new Audio(nextUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => {
-      URL.revokeObjectURL(nextUrl);
-      playNextInQueue();
-    };
-
-    audio.onerror = (e) => {
-      console.error("Audio queue playback error", e);
-      URL.revokeObjectURL(nextUrl);
-      playNextInQueue();
-    };
-
-    audio.play().catch((err) => {
-      console.error("Failed to play queue audio", err);
-      URL.revokeObjectURL(nextUrl);
-      playNextInQueue();
-    });
-  };
-
-  // Helper to split text into clean sentences
-  const splitIntoSentences = (text: string): string[] => {
-    return text
-      .split(/(?<=[.?!])\s+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  };
-
-  // Text-To-Speech (TTS) voice trigger with sentence-by-sentence queue streaming
-  const speakQuestion = (text: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    if (nextAudioRef.current) {
-      nextAudioRef.current.pause();
-      nextAudioRef.current = null;
-    }
-    stopSpeechRecognition(); // Stop listening while AI speaks
-
-    const sentences = splitIntoSentences(text);
-    if (sentences.length === 0) {
-      setAiState("listening");
-      setLiveTranscription("");
-      if (micActive && !textModeActive) {
-        startSpeechRecognition();
-      }
-      return;
-    }
-
-    playSentenceIndex(sentences, 0);
-  };
-
-  const playSentenceIndex = (sentences: string[], index: number) => {
-    if (index >= sentences.length) {
+    const cleanText = text.trim();
+    if (!cleanText) {
       setAiState("listening");
       setLiveTranscription("");
       if (micActive && !textModeActive) {
@@ -322,32 +256,53 @@ function AiInterviewRoom() {
     }
 
     setAiState("speaking");
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-    const audioUrl = `${apiBaseUrl}/api/ai-interviews/${sessionId}/tts?text=${encodeURIComponent(sentences[index])}&t=${Date.now()}`;
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "en-US";
 
-    // Pre-fetch the next sentence in browser cache while current one plays
-    if (index + 1 < sentences.length) {
-      const nextAudioUrl = `${apiBaseUrl}/api/ai-interviews/${sessionId}/tts?text=${encodeURIComponent(sentences[index + 1])}&t=${Date.now()}`;
-      const nextAudio = new Audio(nextAudioUrl);
-      nextAudio.preload = "auto";
-      nextAudioRef.current = nextAudio;
+    // Attempt to load matching English voices (e.g. British vs US, Male vs Female)
+    const voices = window.speechSynthesis.getVoices();
+    const isBritish = voiceAccent.startsWith("bf") || voiceAccent.startsWith("bm");
+    const isMale = voiceAccent.startsWith("am") || voiceAccent.startsWith("bm");
+
+    let voice = voices.find((v) => {
+      const name = v.name.toLowerCase();
+      const lang = v.lang.toLowerCase();
+      const matchLang = isBritish ? lang.startsWith("en-gb") : lang.startsWith("en-us");
+      const matchGender = isMale 
+        ? (name.includes("male") || name.includes("david") || name.includes("microsoft david")) 
+        : (name.includes("female") || name.includes("zira") || name.includes("hazel"));
+      return matchLang && matchGender;
+    });
+
+    if (!voice) {
+      voice = voices.find((v) => v.lang.toLowerCase().startsWith(isBritish ? "en-gb" : "en-us"));
+    }
+    if (!voice) {
+      voice = voices.find((v) => v.lang.startsWith("en-"));
+    }
+    
+    if (voice) {
+      utterance.voice = voice;
     }
 
-    audio.onended = () => {
-      playSentenceIndex(sentences, index + 1);
+    utterance.onend = () => {
+      setAiState("listening");
+      setLiveTranscription("");
+      if (micActive && !textModeActive) {
+        startSpeechRecognition();
+      }
     };
 
-    audio.onerror = (e) => {
-      console.error("Sentence TTS playback error", e);
-      playSentenceIndex(sentences, index + 1);
+    utterance.onerror = (e) => {
+      console.error("SpeechSynthesis playback failed:", e);
+      setAiState("listening");
+      setLiveTranscription("");
+      if (micActive && !textModeActive) {
+        startSpeechRecognition();
+      }
     };
 
-    audio.play().catch((err) => {
-      console.error("Sentence play failed, falling back to next", err);
-      playSentenceIndex(sentences, index + 1);
-    });
+    window.speechSynthesis.speak(utterance);
   };
 
   // Speech-To-Text (STT) listeners
@@ -448,12 +403,8 @@ function AiInterviewRoom() {
     setSubmittingAnswer(true);
     stopSpeechRecognition();
     
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
+    window.speechSynthesis.cancel();
+    sentenceBufferRef.current = "";
 
     setAiState("thinking");
     setInterviewerMessage("Processing your answer...");
@@ -472,9 +423,9 @@ function AiInterviewRoom() {
     
     setSubmittingAnswer(true);
     stopSpeechRecognition();
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    window.speechSynthesis.cancel();
+    sentenceBufferRef.current = "";
+    
     setAiState("thinking");
     setInterviewerMessage("Skipping current question...");
 
@@ -487,6 +438,7 @@ function AiInterviewRoom() {
       } else {
         setInterviewerMessage(action.interviewerMessage);
         speakQuestion(action.interviewerMessage);
+        
         setManualAnswer("");
         setLiveTranscription("");
       }
@@ -501,9 +453,9 @@ function AiInterviewRoom() {
   const handleEndInterview = async () => {
     if (window.confirm("Are you sure you want to end this interview early? Your scores will be aggregated based on current answers.")) {
       stopSpeechRecognition();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      window.speechSynthesis.cancel();
+      sentenceBufferRef.current = "";
+      
       setAiState("thinking");
       setInterviewerMessage("Concluding interview session...");
       try {
