@@ -82,7 +82,9 @@ services:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     container_name: aivalytics-kokoro-tts
     ports:
-      - "${KOKORO_PORT:-8880}:8000"
+      - "${KOKORO_PORT:-8880}:8880"
+    environment:
+      - KOKORO_STREAM=true
     networks:
       - app
     restart: unless-stopped

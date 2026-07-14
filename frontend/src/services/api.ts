@@ -318,3 +318,9 @@ api.getInterviewHistory = () =>
 api.getInterviewSummary = () =>
   api<AiInterviewSummary>("/api/ai-interviews/summary");
 
+api.getInterviewWebSocketUrl = (sessionId: string, token: string) => {
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const cleanBase = API_BASE_URL.replace(/^https?:\/\//, "");
+  return `${wsProtocol}//${cleanBase}/api/ai-interviews/ws/${sessionId}?token=${token}`;
+};
+

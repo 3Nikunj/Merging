@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../services/api";
+import { supabase } from "../../../services/supabase";
 import {
   Mic,
   MicOff,
@@ -63,7 +64,7 @@ function AiInterviewRoom() {
   const [manualAnswer, setManualAnswer] = useState("");
   
   // Media Devices States
-  const [micActive, setMicActive] = useState(true);
+  const [micActive, setMicActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
   
   // Refs
@@ -74,6 +75,10 @@ function AiInterviewRoom() {
   const speechVolumeIntervalRef = useRef<any>(null);
   const startedRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioQueueRef = useRef<string[]>([]);
+  const isPlayingRef = useRef<boolean>(false);
   
   // Live Voice volume indicators
   const [inputVolume, setInputVolume] = useState<number[]>(Array(10).fill(2));
@@ -93,6 +98,25 @@ function AiInterviewRoom() {
     };
   }, []);
 
+  // Request Microphone permission on mount so it's already allowed when user unmutes
+  useEffect(() => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          // Permission granted! Stop the tracks immediately so we don't hold the microphone open
+          stream.getTracks().forEach((track) => track.stop());
+          setMicError(null);
+        })
+        .catch((err) => {
+          console.error("Microphone access failed", err);
+          setMicError("Microphone access denied. Please click the mic icon in your browser address bar to allow permissions.");
+        });
+    } else {
+      setMicError("Microphone and camera features require a secure context (localhost or HTTPS).");
+    }
+  }, []);
+
   // Fetch Session details on load
   useEffect(() => {
     if (sessionId && !startedRef.current) {
@@ -103,6 +127,9 @@ function AiInterviewRoom() {
       stopSpeechRecognition();
       if (audioRef.current) {
         audioRef.current.pause();
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000, "Component unmounted");
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -136,9 +163,70 @@ function AiInterviewRoom() {
   const startInterviewSession = async () => {
     try {
       setAiState("thinking");
-      const action = await api.startInterviewSession(sessionId!);
-      speakQuestion(action.interviewerMessage);
-      setInterviewerMessage(action.interviewerMessage);
+      
+      // Get current auth token
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token || "";
+      
+      const wsUrl = (api as any).getInterviewWebSocketUrl(sessionId!, token);
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "blob";
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "start" }));
+      };
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          const audioUrl = URL.createObjectURL(event.data);
+          enqueueAudio(audioUrl);
+        } else {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "question") {
+              setInterviewerMessage(msg.text);
+              setSubmittingAnswer(false);
+            } else if (msg.type === "text_delta") {
+              setInterviewerMessage((prev) => {
+                if (
+                  prev === "Connecting to recruiter..." ||
+                  prev === "Processing your answer..." ||
+                  prev === "Thinking..." ||
+                  prev === "Connecting..."
+                ) {
+                  return msg.text;
+                }
+                return prev + msg.text;
+              });
+            } else if (msg.type === "status") {
+              setAiState(msg.status);
+            } else if (msg.type === "complete") {
+              setAiState("idle");
+              setInterviewerMessage("Finishing interview and compiling analysis...");
+              navigate(`/ai-interview/report/${sessionId}`);
+            } else if (msg.type === "error") {
+              console.error("WS error message:", msg.message);
+              setInterviewerMessage(`Recruiter error: ${msg.message}`);
+              setAiState("listening");
+            }
+          } catch (e) {
+            console.error("Failed to parse WS text message:", e);
+          }
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.error("WebSocket error:", e);
+      };
+
+      ws.onclose = (event) => {
+        console.info(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
+        if (event.code !== 1000) {
+          setAiState("listening");
+        }
+      };
+
     } catch (e) {
       console.error(e);
       setInterviewerMessage("Failed to start the interview session. Make sure your API key is correctly configured.");
@@ -146,43 +234,119 @@ function AiInterviewRoom() {
     }
   };
 
-  // Text-To-Speech (TTS) voice trigger
-  const speakQuestion = (text: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+  const enqueueAudio = (audioUrl: string) => {
+    audioQueueRef.current.push(audioUrl);
+    if (!isPlayingRef.current) {
+      playNextInQueue();
     }
-    stopSpeechRecognition(); // Stop listening while AI speaks
-    
-    setAiState("speaking");
+  };
 
-    // Load the backend streamed audio
-    const audioUrl = `/api/ai-interviews/${sessionId}/tts?text=${encodeURIComponent(text)}&t=${Date.now()}`;
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => {
+  const playNextInQueue = () => {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
       setAiState("listening");
       setLiveTranscription("");
       if (micActive && !textModeActive) {
         startSpeechRecognition();
       }
+      return;
+    }
+
+    isPlayingRef.current = true;
+    setAiState("speaking");
+    stopSpeechRecognition();
+
+    const nextUrl = audioQueueRef.current.shift()!;
+    const audio = new Audio(nextUrl);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      URL.revokeObjectURL(nextUrl);
+      playNextInQueue();
     };
 
     audio.onerror = (e) => {
-      console.error("TTS playback error", e);
-      setAiState("listening");
-      if (micActive && !textModeActive) {
-        startSpeechRecognition();
-      }
+      console.error("Audio queue playback error", e);
+      URL.revokeObjectURL(nextUrl);
+      playNextInQueue();
     };
 
     audio.play().catch((err) => {
-      console.error("Audio play failed, falling back to listening", err);
+      console.error("Failed to play queue audio", err);
+      URL.revokeObjectURL(nextUrl);
+      playNextInQueue();
+    });
+  };
+
+  // Helper to split text into clean sentences
+  const splitIntoSentences = (text: string): string[] => {
+    return text
+      .split(/(?<=[.?!])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  };
+
+  // Text-To-Speech (TTS) voice trigger with sentence-by-sentence queue streaming
+  const speakQuestion = (text: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (nextAudioRef.current) {
+      nextAudioRef.current.pause();
+      nextAudioRef.current = null;
+    }
+    stopSpeechRecognition(); // Stop listening while AI speaks
+
+    const sentences = splitIntoSentences(text);
+    if (sentences.length === 0) {
       setAiState("listening");
+      setLiveTranscription("");
       if (micActive && !textModeActive) {
         startSpeechRecognition();
       }
+      return;
+    }
+
+    playSentenceIndex(sentences, 0);
+  };
+
+  const playSentenceIndex = (sentences: string[], index: number) => {
+    if (index >= sentences.length) {
+      setAiState("listening");
+      setLiveTranscription("");
+      if (micActive && !textModeActive) {
+        startSpeechRecognition();
+      }
+      return;
+    }
+
+    setAiState("speaking");
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+    const audioUrl = `${apiBaseUrl}/api/ai-interviews/${sessionId}/tts?text=${encodeURIComponent(sentences[index])}&t=${Date.now()}`;
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    // Pre-fetch the next sentence in browser cache while current one plays
+    if (index + 1 < sentences.length) {
+      const nextAudioUrl = `${apiBaseUrl}/api/ai-interviews/${sessionId}/tts?text=${encodeURIComponent(sentences[index + 1])}&t=${Date.now()}`;
+      const nextAudio = new Audio(nextAudioUrl);
+      nextAudio.preload = "auto";
+      nextAudioRef.current = nextAudio;
+    }
+
+    audio.onended = () => {
+      playSentenceIndex(sentences, index + 1);
+    };
+
+    audio.onerror = (e) => {
+      console.error("Sentence TTS playback error", e);
+      playSentenceIndex(sentences, index + 1);
+    };
+
+    audio.play().catch((err) => {
+      console.error("Sentence play failed, falling back to next", err);
+      playSentenceIndex(sentences, index + 1);
     });
   };
 
@@ -277,38 +441,30 @@ function AiInterviewRoom() {
     setIsSpeaking(false);
   };
 
-  // Submit Answer to backend API
-  const submitCandidateAnswer = async (answerText: string) => {
-    if (!answerText.trim() || submittingAnswer) return;
+  // Submit Answer to backend WebSocket
+  const submitCandidateAnswer = (answerText: string) => {
+    if (!answerText.trim() || submittingAnswer || !wsRef.current) return;
     
     setSubmittingAnswer(true);
     stopSpeechRecognition();
+    
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+
     setAiState("thinking");
     setInterviewerMessage("Processing your answer...");
+    setManualAnswer("");
+    setLiveTranscription("");
+    setQuestionCount((prev) => prev + 1);
 
-    try {
-      const action = await api.submitInterviewAnswer(sessionId!, answerText);
-      setQuestionCount((prev) => prev + 1);
-      
-      if (action.status === "completed") {
-        setAiState("idle");
-        setInterviewerMessage("Finishing interview and compiling analysis...");
-        // Auto complete session
-        await api.completeInterviewSession(sessionId!);
-        navigate(`/ai-interview/report/${sessionId}`);
-      } else {
-        setInterviewerMessage(action.interviewerMessage);
-        speakQuestion(action.interviewerMessage);
-        setManualAnswer("");
-        setLiveTranscription("");
-      }
-    } catch (e) {
-      console.error(e);
-      setInterviewerMessage("Error submitting answer. Try skipping or type your answer manually.");
-      setAiState("listening");
-    } finally {
-      setSubmittingAnswer(false);
-    }
+    wsRef.current.send(JSON.stringify({
+      type: "answer",
+      text: answerText
+    }));
   };
 
   const handleSkipQuestion = async () => {

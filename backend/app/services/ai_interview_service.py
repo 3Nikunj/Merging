@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime, timezone
+from typing import AsyncGenerator
 import httpx
 from fastapi import HTTPException
 from pydantic import SecretStr
@@ -28,6 +29,45 @@ class AiInterviewService:
     def _get_api_key(self) -> str | None:
         key = self.settings.groq_api_key
         return key.get_secret_value() if key else None
+
+    async def _call_groq_stream(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        api_key = self._get_api_key()
+        if not api_key:
+            raise RuntimeError("Groq API key not configured")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": messages,
+            "temperature": 0.3,
+            "stream": True
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                async with client.stream("POST", self.groq_url, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(data_str)
+                                content = data["choices"][0]["delta"].get("content", "")
+                                if content:
+                                    yield content
+                            except Exception:
+                                continue
+        except Exception as e:
+            logger.error(f"Error calling Groq API stream: {e}")
+            raise
 
     def _call_groq(self, messages: list[dict], response_format_json: bool = True) -> str:
         api_key = self._get_api_key()
@@ -89,12 +129,13 @@ class AiInterviewService:
         elif "Natasha" in voice or "en-AU" in voice:
             voice = "af_sky"
 
-        url = "http://kokoro-tts:8000/v1/audio/speech"
+        url = "http://kokoro-tts:8880/v1/audio/speech"
         payload = {
             "model": "kokoro",
             "input": text,
             "voice": voice,
-            "response_format": "mp3"
+            "response_format": "mp3",
+            "stream": True
         }
 
         try:
