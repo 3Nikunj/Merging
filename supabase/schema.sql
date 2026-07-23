@@ -10,6 +10,12 @@ create table if not exists public.profiles (
     college text,
     department text,
     year_of_graduation integer,
+    bio text,
+    github_url text,
+    linkedin_url text,
+    skills text,
+    avatar_url text,
+    membership_type text default 'Regular',
     created_at timestamptz not null default now()
 );
 

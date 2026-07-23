@@ -8,6 +8,7 @@ import Unauthorized from "./pages/shared/Unauthorized";
 
 // Student Pages
 import CodingArenaPage from "./pages/student/CodingArena/CodingArenaPage";
+import CodingProblemsListPage from "./pages/student/CodingArena/CodingProblemsListPage";
 import LiveTestPage from "./pages/student/LiveTest/LiveTestPage";
 import PlaceholderPage from "./pages/student/PlaceholderPage";
 import ResultsPage from "./pages/student/Results/ResultsPage";
@@ -16,6 +17,9 @@ import TestSelectionPage from "./pages/student/TestSelection/TestSelectionPage";
 import AiInterviewDashboard from "./pages/student/AiInterview/AiInterviewDashboard";
 import AiInterviewRoom from "./pages/student/AiInterview/AiInterviewRoom";
 import AiInterviewReport from "./pages/student/AiInterview/AiInterviewReport";
+import CompanySimulationPage from "./pages/student/CompanySimulation/CompanySimulationPage";
+import ProfilePage from "./pages/student/Profile/ProfilePage";
+import DashboardPage from "./pages/student/Dashboard/DashboardPage";
 
 // Admin Pages
 import { OverviewPage } from "./pages/admin/OverviewPage";
@@ -47,26 +51,19 @@ function App() {
         <Route path="/practice-tests/instructions" element={<TestInstructionsPage />} />
         <Route path="/practice-tests/live" element={<LiveTestPage />} />
         <Route path="/practice-tests/results" element={<ResultsPage />} />
-        <Route path="/coding-practice" element={<CodingArenaPage />} />
-        <Route
-          path="/dashboard"
-          element={
-            <PlaceholderPage
-              title="Dashboard"
-              description="Your dashboard route is connected and ready for KPI widgets."
-            />
-          }
-        />
+        <Route path="/coding-practice" element={<CodingProblemsListPage />} />
+        <Route path="/coding-practice/problems/:problemId" element={<CodingArenaPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route
           path="/company-simulation"
-          element={<PlaceholderPage title="Company Simulation" />}
+          element={<CompanySimulationPage />}
         />
         <Route path="/ai-interview" element={<AiInterviewDashboard />} />
         <Route path="/ai-interview/live/:sessionId" element={<AiInterviewRoom />} />
         <Route path="/ai-interview/report/:sessionId" element={<AiInterviewReport />} />
         <Route path="/contests" element={<PlaceholderPage title="Contests" />} />
         <Route path="/results" element={<ResultsPage />} />
-        <Route path="/profile" element={<PlaceholderPage title="Profile" />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
       {/* Admin Guarded Routes */}

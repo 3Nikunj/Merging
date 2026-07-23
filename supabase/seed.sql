@@ -1,12 +1,13 @@
 -- Seed Users & Profiles
-insert into public.profiles (id, email, full_name, role, phone, college, department, year_of_graduation)
+insert into public.profiles (id, email, full_name, role, phone, college, department, year_of_graduation, membership_type)
 values
-    ('00000000-0000-0000-0000-000000000001', 'student@aivalytics.com', 'Demo Student', 'student', '1234567890', 'Tech College', 'Computer Science', 2026),
-    ('00000000-0000-0000-0000-000000000002', 'admin@aivalytics.com', 'Demo Admin', 'admin', '0987654321', null, null, null)
+    ('00000000-0000-0000-0000-000000000001', 'student@aivalytics.com', 'Demo Student', 'student', '1234567890', 'Tech College', 'Computer Science', 2026, 'Gold Member'),
+    ('00000000-0000-0000-0000-000000000002', 'admin@aivalytics.com', 'Demo Admin', 'admin', '0987654321', null, null, null, 'Regular')
 on conflict (id) do update set
     email = excluded.email,
     full_name = excluded.full_name,
-    role = excluded.role;
+    role = excluded.role,
+    membership_type = excluded.membership_type;
 
 insert into public.profile_academics (profile_id, tenth_percentage, twelfth_percentage, graduation_cgpa, backlogs, gap_years, gap_during_grad)
 values

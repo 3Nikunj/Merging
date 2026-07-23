@@ -241,16 +241,16 @@ api.submitAttempt = (attemptId: string) =>
 api.getAttemptResult = (attemptId: string) =>
   api<AttemptResultResponse>(`/api/test-attempts/${attemptId}/result`);
 
-api.runCode = (problemId: string, code: string) =>
+api.runCode = (problemId: string, code: string, language: string = "python3") =>
   api<RunCodeResponse>("/api/coding/run", {
     method: "POST",
-    body: JSON.stringify({ problemId, code }),
+    body: JSON.stringify({ problemId, code, language }),
   });
 
-api.submitCode = (problemId: string, code: string) =>
+api.submitCode = (problemId: string, code: string, language: string = "python3") =>
   api<RunCodeResponse & { submissionId: string | null }>("/api/coding/submit", {
     method: "POST",
-    body: JSON.stringify({ problemId, code }),
+    body: JSON.stringify({ problemId, code, language }),
   });
 
 api.getCodingSubmissions = (problemId?: string) =>
@@ -323,4 +323,72 @@ api.getInterviewWebSocketUrl = (sessionId: string, token: string) => {
   const cleanBase = API_BASE_URL.replace(/^https?:\/\//, "");
   return `${wsProtocol}//${cleanBase}/api/ai-interviews/ws/${sessionId}?token=${token}`;
 };
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  college: string | null;
+  department: string | null;
+  year_of_graduation: number | null;
+  bio: string | null;
+  github_url: string | null;
+  linkedin_url: string | null;
+  skills: string | null;
+  avatar_url: string | null;
+  membership_type: string | null;
+}
+
+export interface UserAcademics {
+  tenth_percentage: number | null;
+  twelfth_percentage: number | null;
+  graduation_cgpa: number | null;
+  backlogs: number;
+  gap_years: number;
+  gap_during_grad: boolean;
+}
+
+export interface UserProfileResponse {
+  profile: UserProfile;
+  academics: UserAcademics | null;
+}
+
+export interface UserProfileUpdate {
+  full_name: string | null;
+  phone: string | null;
+  college: string | null;
+  department: string | null;
+  year_of_graduation: number | null;
+  tenth_percentage: number | null;
+  twelfth_percentage: number | null;
+  graduation_cgpa: number | null;
+  backlogs: number;
+  gap_years: number;
+  gap_during_grad: boolean;
+  bio: string | null;
+  github_url: string | null;
+  linkedin_url: string | null;
+  skills: string | null;
+  avatar_url: string | null;
+  membership_type: string | null;
+}
+
+api.getProfile = () => api<UserProfileResponse>("/api/users/me/profile");
+api.updateProfile = (payload: UserProfileUpdate) =>
+  api<UserProfileResponse>("/api/users/me/profile", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+export interface DashboardStats {
+  averageTestScore: number;
+  testsCompleted: number;
+  codingSuccessRate: number;
+  codingTotalSubmissions: number;
+  interviewAverageScore: number;
+  interviewCompletedCount: number;
+}
+
+api.getDashboardStats = () => api<DashboardStats>("/api/users/me/dashboard-stats");
 

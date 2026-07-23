@@ -20,7 +20,7 @@ class PracticeTestService:
             try:
                 tests = (
                     client.table("tests")
-                    .select("id,title,duration_minutes,is_active,settings,created_at")
+                    .select("id,title,duration_minutes,is_active,settings,created_at,subject_id,topic_id")
                     .eq("is_active", True)
                     .order("created_at")
                     .execute()
@@ -236,6 +236,8 @@ class PracticeTestService:
             "duration": row.get("duration_minutes") or settings.get("duration", 0),
             "difficulty": difficulty,
             "is_premium": settings.get("is_premium", False),
+            "subject_id": str(row["subject_id"]) if row.get("subject_id") else None,
+            "topic_id": str(row["topic_id"]) if row.get("topic_id") else None,
         }
 
     def _map_selection_item(self, row: dict, question_count: int) -> dict:

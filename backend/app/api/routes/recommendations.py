@@ -3,11 +3,40 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.dependency import get_current_user_id
-from app.schemas.analytics import RecommendationsResponse, WeakAreasResponse
+from app.schemas.analytics import (
+    RecommendationsResponse, 
+    WeakAreasResponse,
+    UserProfileResponse,
+    UserProfileUpdate,
+    DashboardStatsResponse
+)
 from app.services.analytics_service import analytics_service
+from app.services.profile_service import profile_service
 
 router = APIRouter()
 AuthenticatedUserId = Annotated[str, Depends(get_current_user_id)]
+
+
+@router.get("/me/profile", response_model=UserProfileResponse)
+def get_current_user_profile(
+    current_user_id: AuthenticatedUserId,
+) -> UserProfileResponse:
+    return profile_service.get_profile(current_user_id)
+
+
+@router.put("/me/profile", response_model=UserProfileResponse)
+def update_current_user_profile(
+    payload: UserProfileUpdate,
+    current_user_id: AuthenticatedUserId,
+) -> UserProfileResponse:
+    return profile_service.update_profile(current_user_id, payload)
+
+
+@router.get("/me/dashboard-stats", response_model=DashboardStatsResponse)
+def get_current_user_dashboard_stats(
+    current_user_id: AuthenticatedUserId,
+) -> DashboardStatsResponse:
+    return analytics_service.get_dashboard_stats(current_user_id)
 
 
 @router.get("/me/recommendations", response_model=RecommendationsResponse)

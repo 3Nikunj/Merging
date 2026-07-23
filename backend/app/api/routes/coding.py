@@ -16,19 +16,25 @@ AuthenticatedUserId = Annotated[str, Depends(get_current_user_id)]
 class RunCodeRequest(BaseModel):
     problemId: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=1, max_length=65_536)
+    language: str = Field(default="python3", max_length=64)
 
 
 class SubmitCodeRequest(BaseModel):
     problemId: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=1, max_length=65_536)
+    language: str = Field(default="python3", max_length=64)
     # Accepted for backward compatibility only. Ownership comes from the JWT.
     userId: str | None = None
 
 
 @router.post("/run")
 def execute_code(body: RunCodeRequest) -> dict:
-    """Run submitted Python code without persisting it."""
-    return run_code(problem_id=body.problemId, user_code=body.code)
+    """Run submitted Python/JS/Java/C++ code without persisting it."""
+    return run_code(
+        problem_id=body.problemId,
+        user_code=body.code,
+        language=body.language,
+    )
 
 
 @router.post("/submit")
@@ -41,6 +47,7 @@ def submit_solution(
         problem_id=body.problemId,
         user_code=body.code,
         user_id=current_user_id,
+        language=body.language,
     )
 
 

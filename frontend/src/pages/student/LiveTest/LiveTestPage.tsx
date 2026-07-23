@@ -74,14 +74,6 @@ function LiveTestPage() {
     [currentQuestion, marked, question.id, totalQuestions],
   );
 
-  const toggleMarked = () => {
-    setMarked((current) =>
-      current.includes(currentQuestion)
-        ? current.filter((value) => value !== currentQuestion)
-        : [...current, currentQuestion],
-    );
-  };
-
   const handleSaveNext = async () => {
     if (attemptId) {
       await api.saveAnswer(attemptId, currentQuestion, selectedOption || null).catch(() => undefined);
@@ -181,20 +173,15 @@ function LiveTestPage() {
         <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
           <div className="grid grid-cols-5 gap-3">
             {questionButtons.map((item) => (
-              <button
+              <div
                 key={item.number}
-                type="button"
-                onClick={() => {
-                  setSelectedOption("");
-                  setCurrentQuestion(item.number);
-                }}
                 className={[
-                  "flex aspect-square items-center justify-center rounded-lg text-sm transition hover:scale-105 active:scale-95",
+                  "flex aspect-square items-center justify-center rounded-lg text-sm transition",
                   questionButtonClass(item.status),
                 ].join(" ")}
               >
                 {item.number}
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -202,7 +189,6 @@ function LiveTestPage() {
         <div className="mt-6 grid grid-cols-2 gap-y-3 border-t border-white/10 pt-6 text-[10px] text-white/60">
           <span>Answered</span>
           <span>Not Answered</span>
-          <span>Marked</span>
           <span>Current</span>
         </div>
       </aside>
@@ -295,23 +281,22 @@ function LiveTestPage() {
 
         <footer className="flex h-20 items-center justify-between border-t border-practice-line bg-white px-4 sm:px-6">
           <Link
-            to="/practice-tests/instructions"
+            to="/practice-tests"
             className="rounded-lg border border-practice-line px-5 py-2.5 text-sm font-bold text-practice-subdued transition hover:bg-practice-muted"
           >
-            Previous
+            Exit Test
           </Link>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={toggleMarked}
-              className="rounded-lg px-5 py-2.5 text-sm font-bold text-practice-amberDark transition hover:bg-practice-amber/20"
-            >
-              Mark for Review
-            </button>
-            <button
-              type="button"
+              disabled={!selectedOption}
               onClick={handleSaveNext}
-              className="rounded-lg bg-practice-sidebar px-6 py-2.5 text-sm font-bold text-white transition hover:bg-practice-sidebarActive"
+              className={[
+                "rounded-lg px-6 py-2.5 text-sm font-bold text-white transition",
+                selectedOption
+                  ? "bg-practice-sidebar hover:bg-practice-sidebarActive cursor-pointer"
+                  : "bg-practice-sidebar/40 cursor-not-allowed opacity-50"
+              ].join(" ")}
             >
               Save & Next
             </button>

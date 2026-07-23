@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { codingProblem } from "../../../data/testFlow";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { codingProblems } from "../../../data/codingProblems";
 import Sidebar from "../../../components/student/layout/Sidebar";
 import { api, type RunCodeResponse } from "../../../services/api";
 
@@ -40,17 +41,6 @@ const STATUS_LABELS: Record<string, string> = {
   submitting: "Submitting...",
 };
 
-const DEFAULT_CODE = `class Solution:
-    def twoSum(self, nums: list[int], target: int) -> list[int]:
-        # Write your implementation here
-        prevMap = {}  # val : index
-
-        for i, n in enumerate(nums):
-            diff = target - n
-            if diff in prevMap:
-                return [prevMap[diff], i]
-            prevMap[n] = i`;
-
 interface SubmissionRow {
   id: string;
   problem_id: string;
@@ -73,8 +63,12 @@ function formatTime(iso: string): string {
 }
 
 function CodingArenaPage() {
+  const { problemId } = useParams<{ problemId: string }>();
+  const codingProblem = codingProblems.find((p) => p.id === problemId) || codingProblems[0];
+
   const [activeTab, setActiveTab] = useState<ConsoleTab>("Testcase");
-  const [code, setCode] = useState(DEFAULT_CODE);
+  const [selectedLanguage, setSelectedLanguage] = useState("python3");
+  const [codes, setCodes] = useState<Record<string, string>>({});
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [runResult, setRunResult] = useState<RunCodeResponse | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -83,14 +77,34 @@ function CodingArenaPage() {
   const [selectedSubmissionForView, setSelectedSubmissionForView] = useState<SubmissionRow | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Set default starter code and clear run stats when problem changes
+  useEffect(() => {
+    if (codingProblem) {
+      const initialCodes: Record<string, string> = {
+        python3: codingProblem.starterCodes?.python3?.join("\n") || codingProblem.starterCode.join("\n"),
+        java: codingProblem.starterCodes?.java?.join("\n") || "",
+        javascript: codingProblem.starterCodes?.javascript?.join("\n") || "",
+        cpp: codingProblem.starterCodes?.cpp?.join("\n") || "",
+        c: codingProblem.starterCodes?.c?.join("\n") || "",
+      };
+      setCodes(initialCodes);
+      setSelectedLanguage("python3");
+      setRunStatus("idle");
+      setRunResult(null);
+      setActiveTab("Testcase");
+      fetchSubmissions();
+    }
+  }, [codingProblem.id]);
+
   const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab") {
       e.preventDefault();
       const el = e.currentTarget;
       const start = el.selectionStart;
       const end = el.selectionEnd;
-      const newCode = code.substring(0, start) + "    " + code.substring(end);
-      setCode(newCode);
+      const currentCode = codes[selectedLanguage] || "";
+      const newCode = currentCode.substring(0, start) + "    " + currentCode.substring(end);
+      setCodes((prev) => ({ ...prev, [selectedLanguage]: newCode }));
       requestAnimationFrame(() => {
         el.selectionStart = el.selectionEnd = start + 4;
       });
@@ -101,7 +115,7 @@ function CodingArenaPage() {
     setRunStatus("running");
     setActiveTab("Result");
     try {
-      const result = await api.runCode(codingProblem.id, code);
+      const result = await api.runCode(codingProblem.id, codes[selectedLanguage] || "", selectedLanguage);
       setRunResult(result);
       setRunStatus(result.status);
     } catch {
@@ -133,7 +147,7 @@ function CodingArenaPage() {
     setRunStatus("submitting");
     setActiveTab("Result");
     try {
-      const result = await api.submitCode(codingProblem.id, code);
+      const result = await api.submitCode(codingProblem.id, codes[selectedLanguage] || "", selectedLanguage);
       // Always update the result display regardless of what happens next
       setRunResult(result);
       setRunStatus(result.status);
@@ -164,6 +178,21 @@ function CodingArenaPage() {
 
   const isExecuting = runStatus === "running" || runStatus === "submitting";
 
+  const getFileName = (lang: string) => {
+    switch (lang) {
+      case "java":
+        return "Solution.java";
+      case "javascript":
+        return "solution.js";
+      case "cpp":
+        return "solution.cpp";
+      case "c":
+        return "solution.c";
+      default:
+        return "solution.py";
+    }
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-practice-background text-practice-text">
       <Sidebar />
@@ -173,9 +202,18 @@ function CodingArenaPage() {
         <header className="flex h-[72px] items-center justify-between border-b border-practice-line bg-white px-4 lg:px-8 shrink-0">
           <div className="flex items-center gap-6">
             <h2 className="text-xl font-extrabold text-practice-ink">{codingProblem.title}</h2>
-            <div className="rounded border border-practice-line bg-practice-muted px-3 py-1.5 text-sm">
-              {codingProblem.language}
-            </div>
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              disabled={isExecuting}
+              className="rounded-lg border border-practice-line bg-white px-3 py-1.5 text-sm font-bold text-practice-ink shadow-sm transition-all focus:border-practice-amber focus:outline-none focus:ring-1 focus:ring-practice-amber disabled:opacity-50"
+            >
+              <option value="python3">Python 3</option>
+              <option value="java">Java</option>
+              <option value="javascript">JavaScript</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+            </select>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -240,14 +278,17 @@ function CodingArenaPage() {
           <div className="flex flex-col overflow-hidden bg-[#1e1e1e] text-white">
             {/* File tab bar */}
             <div className="flex border-b border-white/10 bg-[#181818] px-4 py-2 font-mono text-xs text-white/50 shrink-0">
-              solution.py
+              {getFileName(selectedLanguage)}
             </div>
 
             {/* Editable code textarea */}
             <textarea
               ref={textareaRef}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+              value={codes[selectedLanguage] || ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCodes((prev) => ({ ...prev, [selectedLanguage]: val }));
+              }}
               onKeyDown={handleTabKey}
               spellCheck={false}
               autoComplete="off"
@@ -287,15 +328,18 @@ function CodingArenaPage() {
                 {activeTab === "Testcase" && (
                   <div className="grid gap-6 md:grid-cols-2">
                     <div>
-                      <h5 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-practice-subdued">Case 1</h5>
+                      <h5 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-practice-subdued">Case 1 Input</h5>
                       <div className="space-y-2">
-                        <div className="rounded bg-practice-muted p-2 font-mono text-xs">nums = [2, 7, 11, 15]</div>
-                        <div className="rounded bg-practice-muted p-2 font-mono text-xs">target = 9</div>
+                        <div className="rounded bg-practice-muted p-2 font-mono text-xs whitespace-pre-wrap">
+                          {codingProblem?.examples?.[0]?.input || "No test cases available"}
+                        </div>
                       </div>
                     </div>
                     <div>
-                      <h5 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-practice-subdued">Expected</h5>
-                      <div className="rounded bg-practice-muted p-2 font-mono text-xs">[0, 1]</div>
+                      <h5 className="mb-3 text-xs font-extrabold uppercase tracking-widest text-practice-subdued">Expected Output</h5>
+                      <div className="rounded bg-practice-muted p-2 font-mono text-xs whitespace-pre-wrap">
+                        {codingProblem?.examples?.[0]?.output || "No test cases available"}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -304,9 +348,14 @@ function CodingArenaPage() {
                   <div>
                     <p className={`mb-3 text-sm font-extrabold ${STATUS_COLORS[runStatus]}`}>
                       {STATUS_LABELS[runStatus]}
-                      {runResult && !["idle", "running", "submitting"].includes(runStatus) && (
+                      {runResult && !["idle", "running", "submitting"].includes(runStatus) && runResult.totalTests > 0 && (
                         <span className="ml-2 text-xs font-normal text-practice-subdued">
                           ({runResult.testsPassed}/{runResult.totalTests} tests passed)
+                        </span>
+                      )}
+                      {runResult && !["idle", "running", "submitting"].includes(runStatus) && runResult.totalTests === 0 && runStatus === "ACCEPTED" && (
+                        <span className="ml-2 text-xs font-normal text-practice-subdued">
+                          (Verified syntax & compilation)
                         </span>
                       )}
                     </p>
@@ -379,9 +428,11 @@ function CodingArenaPage() {
                                   <td className="py-3 px-3">
                                     <span className={`font-extrabold flex items-center gap-1.5 ${STATUS_COLORS[sub.status]}`}>
                                       {STATUS_LABELS[sub.status] ?? sub.status}
-                                      <span className="text-[10px] font-normal text-practice-subdued">
-                                        ({sub.tests_passed}/{sub.total_tests})
-                                      </span>
+                                      {sub.total_tests > 0 && (
+                                        <span className="text-[10px] font-normal text-practice-subdued">
+                                          ({sub.tests_passed}/{sub.total_tests})
+                                        </span>
+                                      )}
                                     </span>
                                   </td>
                                   <td className="py-3 px-3 text-practice-subdued font-medium">{timeAgo}</td>
@@ -442,7 +493,9 @@ function CodingArenaPage() {
                 <div>
                   <span className="text-practice-subdued font-medium">Test Cases:</span>
                   <span className="font-bold text-practice-ink ml-1.5">
-                    {selectedSubmissionForView.tests_passed} / {selectedSubmissionForView.total_tests} Passed
+                    {selectedSubmissionForView.total_tests > 0
+                      ? `${selectedSubmissionForView.tests_passed} / ${selectedSubmissionForView.total_tests} Passed`
+                      : "Verified (Syntax & Compilation)"}
                   </span>
                 </div>
                 <div>

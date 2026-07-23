@@ -13,11 +13,11 @@ from app.schemas.attempt import (
     SubmitAttemptResponse,
     TestAttempt,
 )
-from app.services.mock_data import ANSWER_REVIEW, LIVE_QUESTION, RESULT_BREAKDOWN, SELECTED_TEST
-
+from app.services.mock_data import ANSWER_REVIEW, LIVE_QUESTION, RESULT_BREAKDOWN, SELECTED_TEST, MOCK_QUESTIONS_POOL
 
 ATTEMPTS: dict[str, dict] = {}
 ANSWERS: dict[tuple[str, int], dict] = {}
+MOCK_ATTEMPT_QUESTIONS: dict[tuple[str, int], dict] = {}
 
 
 class AttemptService:
@@ -49,6 +49,50 @@ class AttemptService:
 
         return self._start_mock_attempt(payload, user_id)
 
+    def _determine_target_difficulty(self, answers_by_num: list[dict]) -> str:
+        current_diff = "easy"
+        correct_window = []
+        incorrect_total_at_current = 0
+
+        for ans in answers_by_num:
+            if ans.get("is_correct") is None:
+                continue
+
+            q_diff = ans.get("difficulty") or "easy"
+            if q_diff != current_diff:
+                current_diff = q_diff
+                correct_window = []
+                incorrect_total_at_current = 0
+
+            is_correct = ans.get("is_correct")
+            correct_window.append(is_correct)
+
+            if len(correct_window) > 5:
+                correct_window.pop(0)
+
+            if not is_correct:
+                incorrect_total_at_current += 1
+
+            # Promotion: rolling window of size <= 5 has >= 4 correct
+            if len(correct_window) >= 1 and sum(1 for x in correct_window if x is True) >= 4:
+                if current_diff == "easy":
+                    current_diff = "medium"
+                elif current_diff == "medium":
+                    current_diff = "hard"
+                correct_window = []
+                incorrect_total_at_current = 0
+
+            # Demotion: 3 total incorrect answers at this level
+            elif incorrect_total_at_current >= 3:
+                if current_diff == "hard":
+                    current_diff = "medium"
+                elif current_diff == "medium":
+                    current_diff = "easy"
+                correct_window = []
+                incorrect_total_at_current = 0
+
+        return current_diff
+
     def get_questions(
         self,
         attempt_id: str,
@@ -60,20 +104,123 @@ class AttemptService:
         if client:
             try:
                 attempt = self._get_attempt(attempt_id, user_id)
-                ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
-                if not ordered_questions:
-                    raise ValueError("Test has no questions")
+                test = self._get_test(attempt["test_id"])
+
+                total_questions = 10
+                if test.get("settings") and isinstance(test["settings"], dict):
+                    total_questions = test["settings"].get("questions", 10)
 
                 answers = self._get_attempt_answers(attempt_id)
-                answered_count = self._answered_count(answers)
+                answered_count = sum(1 for ans in answers.values() if ans.get("selected_option_id") is not None)
                 current_number = self._clamp_question_number(
-                    question_number or min(answered_count + 1, len(ordered_questions)),
-                    len(ordered_questions),
+                    question_number or min(answered_count + 1, total_questions),
+                    total_questions,
                 )
-                question_link = ordered_questions[current_number - 1]
+
+                question_link = None
+                existing_answer_row = None
+                for q_id, ans in answers.items():
+                    ans_js = ans.get("answer_json") or {}
+                    if ans_js.get("questionNumber") == current_number:
+                        question_link = {"question_id": q_id, "marks": ans.get("score") or 1}
+                        existing_answer_row = ans
+                        break
+
+                if not question_link:
+                    # Generate adaptive question
+                    ans_list = []
+                    for q_id, ans in answers.items():
+                        q_num = (ans.get("answer_json") or {}).get("questionNumber")
+                        if q_num is not None:
+                            try:
+                                q_data = self._get_question(q_id)
+                                ans_list.append({
+                                    "question_number": q_num,
+                                    "difficulty": q_data.get("difficulty") or "easy",
+                                    "is_correct": ans.get("is_correct")
+                                })
+                            except Exception:
+                                pass
+                    ans_list.sort(key=lambda x: x["question_number"])
+
+                    target_diff = self._determine_target_difficulty(ans_list)
+
+                    already_used_ids = list(answers.keys())
+                    candidates = (
+                        client.table("questions")
+                        .select("id,title,prompt,marks,difficulty")
+                        .eq("subject_id", test["subject_id"])
+                        .eq("topic_id", test["topic_id"])
+                        .eq("difficulty", target_diff)
+                        .eq("status", "published")
+                        .execute()
+                        .data
+                        or []
+                    )
+                    unused_candidates = [q for q in candidates if str(q["id"]) not in already_used_ids]
+
+                    if not unused_candidates:
+                        fallbacks = []
+                        if target_diff == "hard":
+                            fallbacks = ["medium", "easy"]
+                        elif target_diff == "medium":
+                            fallbacks = ["hard", "easy"]
+                        else:
+                            fallbacks = ["medium", "hard"]
+
+                        for f_diff in fallbacks:
+                            candidates = (
+                                client.table("questions")
+                                .select("id,title,prompt,marks,difficulty")
+                                .eq("subject_id", test["subject_id"])
+                                .eq("topic_id", test["topic_id"])
+                                .eq("difficulty", f_diff)
+                                .eq("status", "published")
+                                .execute()
+                                .data
+                                or []
+                            )
+                            unused_candidates = [q for q in candidates if str(q["id"]) not in already_used_ids]
+                            if unused_candidates:
+                                target_diff = f_diff
+                                break
+
+                    if not unused_candidates:
+                        candidates = (
+                            client.table("questions")
+                            .select("id,title,prompt,marks,difficulty")
+                            .eq("subject_id", test["subject_id"])
+                            .eq("topic_id", test["topic_id"])
+                            .eq("status", "published")
+                            .execute()
+                            .data
+                            or []
+                        )
+                        unused_candidates = [q for q in candidates if str(q["id"]) not in already_used_ids]
+
+                    if not unused_candidates:
+                        raise ValueError("No unused questions available in pool")
+
+                    selected_q = unused_candidates[0]
+                    selected_q_id = str(selected_q["id"])
+                    answer_json = {"status": "not_answered", "questionNumber": current_number}
+
+                    insert_response = client.table("test_attempt_answers").insert({
+                        "attempt_id": attempt_id,
+                        "question_id": selected_q_id,
+                        "answer_json": answer_json,
+                        "score": 0,
+                    }).execute()
+
+                    existing_answer_row = insert_response.data[0]
+                    question_link = {"question_id": selected_q_id, "marks": selected_q.get("marks") or 1}
+
                 question = self._get_question(question_link["question_id"])
                 options = self._get_options(question_link["question_id"])
-                answer = answers.get(str(question_link["question_id"]))
+
+                if attempt["current_question"] != current_number:
+                    client.table("test_attempts").update({"current_question": current_number}).eq("id", attempt_id).execute()
+                    attempt["current_question"] = current_number
 
                 return AttemptQuestionsResponse(
                     attempt=TestAttempt.model_validate(
@@ -83,9 +230,9 @@ class AttemptService:
                             answered_count=answered_count,
                         )
                     ),
-                    question=self._map_question(current_number, question_link, question, options, answer),
-                    total_questions=len(ordered_questions),
-                    marked_questions=self._marked_numbers(ordered_questions, answers),
+                    question=self._map_question(current_number, question_link, question, options, existing_answer_row),
+                    total_questions=total_questions,
+                    marked_questions=[],
                 )
             except (APIError, IndexError, ValueError):
                 pass
@@ -104,13 +251,20 @@ class AttemptService:
         if client:
             try:
                 attempt = self._get_attempt(attempt_id, user_id)
-                ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
-                question_number = self._clamp_question_number(question_id, len(ordered_questions))
-                question_link = ordered_questions[question_number - 1]
-                actual_question_id = str(question_link["question_id"])
+                answers = self._get_attempt_answers(attempt_id)
+                actual_question_id = None
+                for q_id, ans in answers.items():
+                    ans_js = ans.get("answer_json") or {}
+                    if ans_js.get("questionNumber") == question_id:
+                        actual_question_id = q_id
+                        break
+
+                if not actual_question_id:
+                    raise ValueError("Question slot not generated yet")
+
                 selected_option = self._get_option(payload.optionId) if payload.optionId else None
-                score = float(question_link.get("marks") or 1) if selected_option and selected_option.get("is_correct") else 0
-                answer_json = {"status": payload.status, "questionNumber": question_number}
+                score = 1.0 if selected_option and selected_option.get("is_correct") else 0.0
+                answer_json = {"status": payload.status, "questionNumber": question_id}
 
                 response = (
                     client.table("test_attempt_answers")
@@ -131,7 +285,7 @@ class AttemptService:
                 return SaveAnswerResponse.model_validate(
                     {
                         "attempt_id": row["attempt_id"],
-                        "question_id": question_number,
+                        "question_id": question_id,
                         "option_id": row.get("selected_option_id"),
                         "status": payload.status,
                     }
@@ -196,18 +350,60 @@ class AttemptService:
             except (APIError, ValueError):
                 pass
 
-        self._get_mock_attempt(attempt_id, user_id)
+        # MOCK RESULT CALCULATION
+        attempt = self._get_mock_attempt(attempt_id, user_id)
+
+        correct = 0
+        incorrect = 0
+        skipped = 0
+        review_rows: list[AnswerReviewRow] = []
+
+        attempt_qs = [(num, q) for (a_id, num), q in MOCK_ATTEMPT_QUESTIONS.items() if a_id == attempt_id]
+        attempt_qs.sort(key=lambda x: x[0])
+
+        for num, q in attempt_qs:
+            ans = ANSWERS.get((attempt_id, q["id"]))
+            is_correct = False
+            status = "Skipped"
+
+            if ans and ans.get("option_id"):
+                correct_opt = next((o for o in q["options"] if o.get("is_correct")), None)
+                if correct_opt and correct_opt["id"] == ans.get("option_id"):
+                    correct += 1
+                    status = "Correct"
+                else:
+                    incorrect += 1
+                    status = "Incorrect"
+            else:
+                skipped += 1
+
+            review_rows.append(
+                AnswerReviewRow(
+                    id=str(num).zfill(2),
+                    preview=q["prompt"][:80],
+                    status=status,
+                    topic="Aptitude Practice",
+                )
+            )
+
+        total_questions = max(len(attempt_qs), 1)
+        overall_score = round((correct / total_questions) * 100)
+
         return AttemptResult(
             attempt_id=attempt_id,
-            title=SELECTED_TEST["title"],
-            overall_score=78,
-            correct=24,
-            incorrect=4,
-            skipped=2,
-            time_taken="38:15",
-            percentile="92nd",
-            breakdown=RESULT_BREAKDOWN,
-            answer_review=ANSWER_REVIEW,
+            title="Adaptive Practice Test",
+            overall_score=overall_score,
+            correct=correct,
+            incorrect=incorrect,
+            skipped=skipped,
+            time_taken="15:30",
+            percentile="85th",
+            breakdown=[
+                ResultBreakdown(label="Correct", score=correct),
+                ResultBreakdown(label="Incorrect", score=incorrect),
+                ResultBreakdown(label="Skipped", score=skipped),
+            ],
+            answer_review=review_rows,
         )
 
     def _resolve_test_id(self, requested_test_id: str) -> str:
@@ -215,12 +411,10 @@ class AttemptService:
         if not client:
             raise ValueError("Supabase client unavailable")
 
-        # Query database directly using the requested text ID
         rows = client.table("tests").select("id").eq("id", requested_test_id).limit(1).execute().data or []
         if rows:
             return rows[0]["id"]
 
-        # Fallback to first created test
         fallback_rows = client.table("tests").select("id").order("created_at").limit(1).execute().data or []
         if not fallback_rows:
             raise ValueError("No tests available")
@@ -365,18 +559,23 @@ class AttemptService:
     def _calculate_result(self, attempt_id: str, user_id: str) -> AttemptResult:
         attempt = self._get_attempt(attempt_id, user_id)
         test = self._get_test(attempt["test_id"])
-        ordered_questions = self._get_ordered_test_questions(attempt["test_id"])
         answers = self._get_attempt_answers(attempt_id)
+
+        ordered_answers = []
+        for q_id, ans in answers.items():
+            q_num = (ans.get("answer_json") or {}).get("questionNumber")
+            if q_num is not None:
+                ordered_answers.append((q_num, q_id, ans))
+
+        ordered_answers.sort(key=lambda x: x[0])
 
         correct = 0
         incorrect = 0
         skipped = 0
         review_rows: list[AnswerReviewRow] = []
 
-        for index, question_link in enumerate(ordered_questions, start=1):
-            question_id = str(question_link["question_id"])
-            answer = answers.get(question_id)
-            question = self._get_question(question_id)
+        for index, q_id, answer in ordered_answers:
+            question = self._get_question(q_id)
 
             if not answer or not answer.get("selected_option_id"):
                 skipped += 1
@@ -397,7 +596,7 @@ class AttemptService:
                 )
             )
 
-        total_questions = max(len(ordered_questions), 1)
+        total_questions = max(len(ordered_answers), 1)
         overall_score = round((correct / total_questions) * 100)
         percentile = self._calculate_percentile(attempt["test_id"], overall_score)
 
@@ -424,7 +623,6 @@ class AttemptService:
             return "50th"
 
         try:
-            # Query all submitted attempts for this test
             rows = (
                 client.table("test_attempts")
                 .select("percentage")
@@ -457,7 +655,7 @@ class AttemptService:
         if not client:
             raise ValueError("Supabase client unavailable")
 
-        rows = client.table("tests").select("id,title").eq("id", test_id).limit(1).execute().data or []
+        rows = client.table("tests").select("id,title,subject_id,topic_id,settings").eq("id", test_id).limit(1).execute().data or []
         if not rows:
             raise ValueError("Test not found")
         return rows[0]
@@ -509,8 +707,8 @@ class AttemptService:
             "user_id": user_id,
             "test_id": payload.testId,
             "status": "IN_PROGRESS",
-            "current_question": 12,
-            "answered_count": 11,
+            "current_question": 1,
+            "answered_count": 0,
         }
         ATTEMPTS[attempt_id] = attempt
         return TestAttempt.model_validate(attempt)
@@ -527,12 +725,95 @@ class AttemptService:
         user_id: str,
     ) -> AttemptQuestionsResponse:
         attempt = self._get_mock_attempt(attempt_id, user_id)
+        total_questions = 10
+        current_number = attempt.get("current_question", 1)
+
+        q_key = (attempt_id, current_number)
+        selected_q = MOCK_ATTEMPT_QUESTIONS.get(q_key)
+
+        if not selected_q:
+            attempt_answers = [ans for (a_id, q_id), ans in ANSWERS.items() if a_id == attempt_id]
+            ans_list = []
+            for ans in attempt_answers:
+                q_id = ans["question_id"]
+                q_num = None
+                q_diff = "easy"
+                for (a_id, num), q in MOCK_ATTEMPT_QUESTIONS.items():
+                    if a_id == attempt_id and q["id"] == q_id:
+                        q_num = num
+                        q_diff = q["difficulty"]
+                        break
+                if q_num is not None:
+                    is_correct = False
+                    q_in_pool = next((qp for qp in MOCK_QUESTIONS_POOL if qp["id"] == q_id), None)
+                    if q_in_pool:
+                        correct_opt = next((o for o in q_in_pool["options"] if o.get("is_correct")), None)
+                        if correct_opt and correct_opt["id"] == ans.get("option_id"):
+                            is_correct = True
+                    ans_list.append({
+                        "question_number": q_num,
+                        "difficulty": q_diff,
+                        "is_correct": is_correct
+                    })
+            ans_list.sort(key=lambda x: x["question_number"])
+
+            target_diff = self._determine_target_difficulty(ans_list)
+
+            already_used_ids = [q["id"] for (a_id, num), q in MOCK_ATTEMPT_QUESTIONS.items() if a_id == attempt_id]
+            candidates = [qp for qp in MOCK_QUESTIONS_POOL if qp["difficulty"] == target_diff and qp["id"] not in already_used_ids]
+
+            if not candidates:
+                fallbacks = ["medium", "easy"] if target_diff == "hard" else (["hard", "easy"] if target_diff == "medium" else ["medium", "hard"])
+                for f_diff in fallbacks:
+                    candidates = [qp for qp in MOCK_QUESTIONS_POOL if qp["difficulty"] == f_diff and qp["id"] not in already_used_ids]
+                    if candidates:
+                        target_diff = f_diff
+                        break
+
+            if not candidates:
+                candidates = [qp for qp in MOCK_QUESTIONS_POOL if qp["id"] not in already_used_ids]
+
+            if not candidates:
+                raise ValueError("No unused mock questions available")
+
+            selected_q = candidates[0]
+            MOCK_ATTEMPT_QUESTIONS[q_key] = selected_q
+
+        mapped_options = [
+            {
+                "id": str(opt["id"]),
+                "label": opt["option_key"],
+                "value": opt["option_text"]
+            }
+            for opt in selected_q["options"]
+        ]
+
+        mapped_q = {
+            "id": current_number,
+            "points": selected_q["points"],
+            "text": selected_q["prompt"],
+            "options": mapped_options,
+            "answerId": None
+        }
+
+        existing_ans = ANSWERS.get((attempt_id, selected_q["id"]))
+        if existing_ans:
+            mapped_q["answerId"] = existing_ans.get("option_id")
+
+        answered_count = sum(1 for (a_id, q_id), ans in ANSWERS.items() if a_id == attempt_id and ans.get("option_id") is not None)
 
         return AttemptQuestionsResponse(
-            attempt=TestAttempt.model_validate(attempt),
-            question=LIVE_QUESTION,
-            total_questions=SELECTED_TEST["questions"],
-            marked_questions=[15, 22],
+            attempt=TestAttempt.model_validate({
+                "id": attempt_id,
+                "userId": user_id,
+                "testId": attempt["test_id"],
+                "status": "IN_PROGRESS",
+                "currentQuestion": current_number,
+                "answeredCount": answered_count
+            }),
+            question=mapped_q,
+            totalQuestions=total_questions,
+            markedQuestions=[]
         )
 
     def _save_mock_answer(
@@ -543,21 +824,34 @@ class AttemptService:
         user_id: str,
     ) -> SaveAnswerResponse:
         attempt = self._get_mock_attempt(attempt_id, user_id)
+
+        q_key = (attempt_id, question_id)
+        question_obj = MOCK_ATTEMPT_QUESTIONS.get(q_key)
+        if not question_obj:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        actual_q_id = question_obj["id"]
+
         answer = {
             "attempt_id": attempt_id,
-            "question_id": question_id,
+            "question_id": actual_q_id,
             "option_id": payload.optionId,
             "status": payload.status,
         }
-        ANSWERS[(attempt_id, question_id)] = answer
+        ANSWERS[(attempt_id, actual_q_id)] = answer
+
+        answered_count = sum(1 for (a_id, q_id), ans in ANSWERS.items() if a_id == attempt_id and ans.get("option_id") is not None)
+        attempt["answered_count"] = answered_count
 
         if payload.status == "answered":
-            attempt["answered_count"] = max(
-                attempt["answered_count"],
-                question_id,
-            )
+            attempt["current_question"] = min(question_id + 1, 10)
 
-        return SaveAnswerResponse.model_validate(answer)
+        return SaveAnswerResponse.model_validate({
+            "attemptId": attempt_id,
+            "questionId": question_id,
+            "optionId": payload.optionId,
+            "status": payload.status,
+        })
 
 
 attempt_service = AttemptService()

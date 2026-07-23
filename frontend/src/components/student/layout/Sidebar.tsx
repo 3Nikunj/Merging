@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   Bot,
   BriefcaseBusiness,
   ClipboardList,
@@ -19,7 +18,6 @@ const navItems = [
   { label: "AI Interview", path: "/ai-interview" },
   { label: "Coding Practice", path: "/coding-practice" },
   { label: "Contests", path: "/contests" },
-  { label: "Results", path: "/results" },
   { label: "Profile", path: "/profile" },
 ];
 
@@ -30,7 +28,6 @@ const icons: Record<string, JSX.Element> = {
   "AI Interview": <Bot className="h-4 w-4" aria-hidden="true" />,
   "Coding Practice": <Code2 className="h-4 w-4" aria-hidden="true" />,
   Contests: <Trophy className="h-4 w-4" aria-hidden="true" />,
-  Results: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
   Profile: <User className="h-4 w-4" aria-hidden="true" />,
 };
 
@@ -64,7 +61,9 @@ function Sidebar() {
                   "group flex items-center gap-4 rounded px-4 py-3 text-base font-semibold transition-all duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-inset",
                   isActive ||
                   (item.label === "Tests" &&
-                    location.pathname.startsWith("/practice-tests"))
+                    location.pathname.startsWith("/practice-tests")) ||
+                  (item.label === "Coding Practice" &&
+                    location.pathname.startsWith("/coding-practice"))
                     ? "border-l-4 border-practice-amber bg-practice-sidebarActive text-white shadow-lg shadow-black/10"
                     : "text-white/70 hover:bg-practice-sidebarActive/50 hover:text-white",
                 ].join(" ")

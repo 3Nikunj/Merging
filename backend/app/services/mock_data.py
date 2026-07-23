@@ -209,3 +209,281 @@ WEAK_AREAS = [
     {"topic": "Recursion", "accuracy": 34},
     {"topic": "SQL Joins", "accuracy": 48},
 ]
+
+MOCK_QUESTIONS_POOL = [
+    # --- EASY QUESTIONS ---
+    {
+        "id": 101,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "Which of the following is the only even prime number?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "0"},
+            {"id": "b", "option_key": "B", "option_text": "2", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "4"},
+            {"id": "d", "option_key": "D", "option_text": "6"}
+        ]
+    },
+    {
+        "id": 102,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the smallest two-digit prime number?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "10"},
+            {"id": "b", "option_key": "B", "option_text": "11", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "13"},
+            {"id": "d", "option_key": "D", "option_text": "17"}
+        ]
+    },
+    {
+        "id": 103,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "How many prime numbers exist between 1 and 10?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "3"},
+            {"id": "b", "option_key": "B", "option_text": "4", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "5"},
+            {"id": "d", "option_key": "D", "option_text": "6"}
+        ]
+    },
+    {
+        "id": 104,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "Which of the following is NOT a prime number?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "2"},
+            {"id": "b", "option_key": "B", "option_text": "3"},
+            {"id": "c", "option_key": "C", "option_text": "9", "is_correct": True},
+            {"id": "d", "option_key": "D", "option_text": "11"}
+        ]
+    },
+    {
+        "id": 105,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the prime factorization of 15?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "1 * 15"},
+            {"id": "b", "option_key": "B", "option_text": "3 * 5", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "2 * 7.5"},
+            {"id": "d", "option_key": "D", "option_text": "3 * 3 * 2"}
+        ]
+    },
+    {
+        "id": 106,
+        "difficulty": "easy",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "Which of these numbers is prime?",
+        "points": 1,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "15"},
+            {"id": "b", "option_key": "B", "option_text": "21"},
+            {"id": "c", "option_key": "C", "option_text": "23", "is_correct": True},
+            {"id": "d", "option_key": "D", "option_text": "25"}
+        ]
+    },
+
+    # --- MEDIUM QUESTIONS ---
+    {
+        "id": 201,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "How many prime factors does 60 have?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "2"},
+            {"id": "b", "option_key": "B", "option_text": "3", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "4"},
+            {"id": "d", "option_key": "D", "option_text": "5"}
+        ]
+    },
+    {
+        "id": 202,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the sum of the prime factors of 42?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "10"},
+            {"id": "b", "option_key": "B", "option_text": "12", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "14"},
+            {"id": "d", "option_key": "D", "option_text": "15"}
+        ]
+    },
+    {
+        "id": 203,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "If x is a prime number and 17 < x < 29, what is the sum of possible values of x?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "42"},
+            {"id": "b", "option_key": "B", "option_text": "23"},
+            {"id": "c", "option_key": "C", "option_text": "46", "is_correct": True},
+            {"id": "d", "option_key": "D", "option_text": "51"}
+        ]
+    },
+    {
+        "id": 204,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "Which of the following numbers is the product of exactly two prime numbers?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "27"},
+            {"id": "b", "option_key": "B", "option_text": "33", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "36"},
+            {"id": "d", "option_key": "D", "option_text": "45"}
+        ]
+    },
+    {
+        "id": 205,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the largest prime factor of 255?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "5"},
+            {"id": "b", "option_key": "B", "option_text": "17", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "51"},
+            {"id": "d", "option_key": "D", "option_text": "85"}
+        ]
+    },
+    {
+        "id": 206,
+        "difficulty": "medium",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the sum of the first five prime numbers?",
+        "points": 2,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "26"},
+            {"id": "b", "option_key": "B", "option_text": "28", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "17"},
+            {"id": "d", "option_key": "D", "option_text": "11"}
+        ]
+    },
+
+    # --- HARD QUESTIONS ---
+    {
+        "id": 301,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the total number of positive factors of 360?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "18"},
+            {"id": "b", "option_key": "B", "option_text": "24", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "30"},
+            {"id": "d", "option_key": "D", "option_text": "36"}
+        ]
+    },
+    {
+        "id": 302,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "If p and q are prime numbers such that p > q and their sum is 12, what is the value of p^2 - q^2?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "24"},
+            {"id": "b", "option_key": "B", "option_text": "48", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "36"},
+            {"id": "d", "option_key": "D", "option_text": "72"}
+        ]
+    },
+    {
+        "id": 303,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "For how many integers n is the value of (n^2 - 19n + 92) a prime number?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "1"},
+            {"id": "b", "option_key": "B", "option_text": "2", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "4"},
+            {"id": "d", "option_key": "D", "option_text": "0"}
+        ]
+    },
+    {
+        "id": 304,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "What is the product of all prime factors of 10! (10 factorial)?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "210", "is_correct": True},
+            {"id": "b", "option_key": "B", "option_text": "3840"},
+            {"id": "c", "option_key": "C", "option_text": "10"},
+            {"id": "d", "option_key": "D", "option_text": "5040"}
+        ]
+    },
+    {
+        "id": 305,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "If N = 2^4 * 3^3 * 5^2, how many of N's positive factors are perfect squares?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "6"},
+            {"id": "b", "option_key": "B", "option_text": "12", "is_correct": True},
+            {"id": "c", "option_key": "C", "option_text": "18"},
+            {"id": "d", "option_key": "D", "option_text": "24"}
+        ]
+    },
+    {
+        "id": 306,
+        "difficulty": "hard",
+        "subject_id": "quant",
+        "topic_id": "number-systems",
+        "subtopic_id": "prime-factors",
+        "prompt": "How many primes divide the sum of all divisors of 120?",
+        "points": 3,
+        "options": [
+            {"id": "a", "option_key": "A", "option_text": "2", "is_correct": True},
+            {"id": "b", "option_key": "B", "option_text": "3"},
+            {"id": "c", "option_key": "C", "option_text": "4"},
+            {"id": "d", "option_key": "D", "option_text": "5"}
+        ]
+    }
+]

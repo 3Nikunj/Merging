@@ -24,7 +24,9 @@ function TestSelectionPage() {
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [loadingSubtopics, setLoadingSubtopics] = useState(false);
 
-  // Load initial subjects
+  const [practiceTests, setPracticeTests] = useState<any[]>([]);
+
+  // Load initial subjects and practice tests
   useEffect(() => {
     setLoadingSubjects(true);
     api.getSubjects()
@@ -33,6 +35,12 @@ function TestSelectionPage() {
       })
       .catch(() => undefined)
       .finally(() => setLoadingSubjects(false));
+
+    api.getPracticeTests()
+      .then((data) => {
+        setPracticeTests(data.tests);
+      })
+      .catch(() => undefined);
   }, []);
 
   // Subject selection handler
@@ -89,13 +97,29 @@ function TestSelectionPage() {
 
   const isContinueEnabled = !!selectedSubject && !!selectedTopic && !!selectedSubtopic;
 
+  // Find matching test for the selection
+  let resolvedTestId = testId;
+  if (practiceTests.length > 0) {
+    // Try matching by selected topic first
+    let matchedTest = selectedTopic ? practiceTests.find((t) => t.topicId === selectedTopic) : null;
+    // If not found, match by selected subject
+    if (!matchedTest && selectedSubject) {
+      matchedTest = practiceTests.find((t) => t.subjectId === selectedSubject);
+    }
+    if (matchedTest) {
+      resolvedTestId = matchedTest.id;
+    }
+  }
+
   const handleContinue = () => {
     if (!isContinueEnabled) return;
     navigate("/practice-tests/instructions", {
       state: {
-        testId,
+        testId: resolvedTestId,
         subjectId: selectedSubject,
+        subjectTitle: currentSubject?.title,
         topicId: selectedTopic,
+        topicTitle: currentTopic?.title,
         subtopicId: selectedSubtopic,
         subtopicTitle: currentSubtopic?.title,
       },

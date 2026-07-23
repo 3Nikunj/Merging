@@ -15,6 +15,8 @@ class PracticeTest(BaseModel):
     duration: int
     difficulty: Difficulty
     is_premium: bool = Field(default=False, serialization_alias="isPremium")
+    subject_id: str | None = Field(default=None, serialization_alias="subjectId")
+    topic_id: str | None = Field(default=None, serialization_alias="topicId")
 
 
 class SelectionItem(BaseModel):

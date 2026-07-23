@@ -19,7 +19,9 @@ function TestInstructionsPage() {
   const state = location.state as {
     testId: string;
     subjectId: string;
+    subjectTitle?: string;
     topicId: string;
+    topicTitle?: string;
     subtopicId: string;
     subtopicTitle?: string;
   } | null;
@@ -40,27 +42,35 @@ function TestInstructionsPage() {
   };
 
   useEffect(() => {
-    if (state?.testId) {
-      api.getPracticeTests()
-        .then((response) => {
-          const matched = response.tests.find((t) => t.id === state.testId);
-          if (matched) {
-            setTest({
-              subject: state.subjectId || matched.category,
-              topic: state.topicId || "General",
-              subtopic: state.subtopicTitle || state.subtopicId || "General",
-              title: matched.title,
-              questions: matched.questions,
-              duration: matched.duration,
-              totalMarks: matched.questions * 4,
-              difficulty: matched.difficulty,
-              passingScore: "50%",
-              attemptsAllowed: 3,
-              bestScore: matched.status === "Completed" ? "78%" : "N/A",
-            });
-          }
-        })
-        .catch(() => undefined);
+    if (state) {
+      // Set initial values from selection state immediately
+      setTest((prev) => ({
+        ...prev,
+        subject: state.subjectTitle || state.subjectId || prev.subject,
+        topic: state.topicTitle || state.topicId || prev.topic,
+        subtopic: state.subtopicTitle || state.subtopicId || prev.subtopic,
+        title: state.subtopicTitle ? `${state.subtopicTitle} Practice` : prev.title,
+      }));
+
+      // Fetch matching database test details if testId exists
+      if (state.testId) {
+        api.getPracticeTests()
+          .then((response) => {
+            const matched = response.tests.find((t) => t.id === state.testId);
+            if (matched) {
+              setTest((prev) => ({
+                ...prev,
+                title: matched.title,
+                questions: matched.questions,
+                duration: matched.duration,
+                totalMarks: matched.questions * 4,
+                difficulty: matched.difficulty,
+                bestScore: matched.status === "Completed" ? "78%" : "N/A",
+              }));
+            }
+          })
+          .catch(() => undefined);
+      }
     } else {
       api
         .getSelectionData()

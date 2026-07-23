@@ -1,6 +1,7 @@
 FROM python:3.12-alpine@sha256:6d43704baacd1bfbe7c295d7f13079d5d8104ed33568873133f8fc69980419df
 
-RUN addgroup -S -g 65532 sandbox \
+RUN apk add --no-cache nodejs openjdk17 gcc g++ musl-dev \
+    && addgroup -S -g 65532 sandbox \
     && adduser -S -D -H -u 65532 -G sandbox sandbox \
     && mkdir /sandbox \
     && chown 65532:65532 /sandbox

@@ -212,3 +212,25 @@ Registered in [backend/app/api/router.py](file:///d:/AiValytics%20Docs/Merging/b
   ```
 - RLS Policies and compiler compatibility checks verified.
 - Direct router bindings and FastAPI middleware compilation checked.
+
+---
+
+## 👨‍💻 Coding Arena & Practice Test Selection Updates
+
+### 1. Multi-Language Sandbox Runner
+* **Supported Languages**: Python 3, JavaScript, Java, C++, and C execution.
+* **Test Configurations**: Added real test case definitions (inputs, calls, expected outputs) for all 9 coding problems (`001` through `009`) in the backend executor settings.
+* **Output Verbosity**: Standardized execution console output to display:
+  - Test Input parameters
+  - Expected Output
+  - Actual returned Output
+  - PASS/FAIL verdicts per test case
+* **Complex Structures**: Added custom pointer-to-list converters (`ListNode` serialization) inside the runners for Java, JavaScript, Python, C++, and C so pointer outputs serialize cleanly as JSON arrays.
+* **Container Environment**: Added compiler dependencies (`musl-dev`, `g++`, `gcc`, `openjdk17`, `nodejs`) directly to the sandbox runtime `Dockerfile`.
+* **Execution Pipe**: Modified executor endpoints to run containers with interactive input streams (`--interactive`), avoiding EOF crashes for compiled targets.
+
+### 2. Practice Test Selection & Page Forwarding
+* **Database Selection Payload**: Schema and service mapping in `practice_test_service.py` modified to return `subject_id` and `topic_id` alongside the tests.
+* **Dynamic Resolution**: Replaced the static `"prime-factors"` selection defaults. The app now queries available practice tests, matches them by Topic ID (with Subject ID fallback), and retrieves the correct test configuration details.
+* **Human-Readable Labels**: Modified the selection-to-instructions state transfer to forward human-readable category strings (`subjectTitle`, `topicTitle`, `subtopicTitle`), preventing database UUID strings from rendering on the Instructions summary page.
+

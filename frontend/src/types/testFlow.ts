@@ -49,6 +49,7 @@ export interface CodingProblem {
   constraints: string[];
   tags: string[];
   starterCode: string[];
+  starterCodes?: Record<string, string[]>;
 }
 
 export interface ResultBreakdown {
