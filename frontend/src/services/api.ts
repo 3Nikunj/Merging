@@ -171,6 +171,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("user_role");
+      supabase.auth.signOut().catch(() => {});
+      window.location.href = "/login";
+      throw new Error("Session expired. Please log in again.");
+    }
     const text = await response.text();
     throw new Error(text || `Request failed: ${response.status}`);
   }
@@ -388,7 +394,24 @@ export interface DashboardStats {
   codingTotalSubmissions: number;
   interviewAverageScore: number;
   interviewCompletedCount: number;
+  subjectMastery: Record<string, number>;
 }
 
 api.getDashboardStats = () => api<DashboardStats>("/api/users/me/dashboard-stats");
+
+api.getCompanySimulationQuestions = (companyId: string, roundType: string, difficulty?: string) => {
+  let url = `/api/company-simulation/questions?company_id=${companyId}&round_type=${roundType}`;
+  if (difficulty) {
+    url += `&difficulty=${difficulty}`;
+  }
+  return api<{ questions: any[] }>(url);
+};
+
+api.getCompanies = () => api<{ items: { id: string; name: string }[] }>("/admin/companies");
+api.createCompany = (name: string) => api<{ id: string; name: string }>("/admin/companies", {
+  method: "POST",
+  body: JSON.stringify({ name }),
+});
+
+
 

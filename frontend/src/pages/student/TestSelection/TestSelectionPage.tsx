@@ -95,7 +95,7 @@ function TestSelectionPage() {
     }
   }
 
-  const isContinueEnabled = !!selectedSubject && !!selectedTopic && !!selectedSubtopic;
+  const isContinueEnabled = !!selectedSubject && !!selectedTopic && !!selectedSubtopic && (currentSubtopic?.questions ?? 0) > 0;
 
   // Find matching test for the selection
   let resolvedTestId = testId;
@@ -175,6 +175,11 @@ function TestSelectionPage() {
                 {selectedTopic ? ` > ${currentTopic?.title}` : ""}
                 {selectedSubtopic ? ` > ${currentSubtopic?.title}` : ""}
               </p>
+              {selectedSubtopic && (currentSubtopic?.questions ?? 0) === 0 && (
+                <p className="text-xs font-bold text-red-500 mt-0.5">
+                  ⚠️ No questions available for this subtopic yet.
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-6">

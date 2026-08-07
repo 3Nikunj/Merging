@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Archive,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   ClipboardCheck,
   Download,
@@ -44,6 +45,7 @@ type QuestionForm = {
   metadataText: string;
   options: QuestionOption[];
   coding_test_cases: CodingTestCase[];
+  companies: string[];
 };
 
 type ImportRow = Record<string, string>;
@@ -106,6 +108,7 @@ const emptyForm = (questionType: QuestionType = "mcq"): QuestionForm => ({
       : "{}",
   options: defaultMcqOptions.map((option) => ({ ...option })),
   coding_test_cases: defaultCodingCases.map((testCase) => ({ ...testCase })),
+  companies: [],
 });
 
 function normalize(value?: string | null) {
@@ -148,6 +151,7 @@ function buildQuestionPayload(form: QuestionForm) {
             .filter((testCase) => testCase.input_text.trim() && testCase.expected_output.trim())
             .map((testCase, index) => ({ ...testCase, sort_order: index + 1 }))
         : [],
+    companies: form.companies || [],
   };
 }
 
@@ -253,6 +257,9 @@ export function QuestionBankPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
   const [audit, setAudit] = useState<QuestionAudit | null>(null);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState<QuestionForm>(() => emptyForm());
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
@@ -300,18 +307,20 @@ export function QuestionBankPage() {
 
   async function load() {
     setLoading(true);
-    const [questionRes, subjectRes, topicRes, subtopicRes, auditRes] = await Promise.all([
+    const [questionRes, subjectRes, topicRes, subtopicRes, auditRes, companyRes] = await Promise.all([
       api<{ items: QuestionItem[] }>("/admin/questions"),
       api<{ items: Subject[] }>("/admin/subjects"),
       api<{ items: Topic[] }>("/admin/topics"),
       api<{ items: Subtopic[] }>("/admin/subtopics"),
       api<QuestionAudit>("/admin/questions/audit"),
+      api.getCompanies(),
     ]);
     setQuestions(questionRes.items);
     setSubjects(subjectRes.items);
     setTopics(topicRes.items);
     setSubtopics(subtopicRes.items);
     setAudit(auditRes);
+    setCompanies(companyRes.items);
     setLoading(false);
   }
 
@@ -364,6 +373,7 @@ export function QuestionBankPage() {
       coding_test_cases: question.coding_test_cases?.length
         ? question.coding_test_cases.map((testCase) => ({ ...testCase }))
         : defaultCodingCases.map((testCase) => ({ ...testCase })),
+      companies: question.question_companies?.map((qc) => qc.company_id) || [],
     });
   }
 
@@ -474,6 +484,7 @@ export function QuestionBankPage() {
         metadataText: JSON.stringify(metadata),
         options,
         coding_test_cases: testCases,
+        companies: [],
       };
 
       errors.push(...validateForm(rowForm).filter((issue) => !errors.includes(issue)));
@@ -596,31 +607,44 @@ export function QuestionBankPage() {
           <div className="taxonomy-tree">
             {subjects.map((subject) => {
               const subjectTopics = topics.filter((topic) => topic.subject_id === subject.id);
+              const isExpanded = !!expandedSubjects[subject.id];
               return (
                 <div key={subject.id} className="taxonomy-group">
                   <button
                     className={`taxonomy-node ${selectedSubjectId === subject.id && !selectedTopicId ? "active" : ""}`}
                     type="button"
-                    onClick={() => chooseTaxonomy(subject.id)}
+                    onClick={() => {
+                      chooseTaxonomy(subject.id);
+                      setExpandedSubjects((prev) => ({ ...prev, [subject.id]: !prev[subject.id] }));
+                    }}
                   >
-                    <Layers3 size={15} />
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <Layers3 size={15} />
+                    </span>
                     <span>{subject.name}</span>
                     <strong>{taxonomyCounts.get(`subject:${subject.id}`) || 0}</strong>
                   </button>
-                  {subjectTopics.map((topic) => {
+                  {isExpanded && subjectTopics.map((topic) => {
                     const topicSubtopics = subtopics.filter((subtopic) => subtopic.topic_id === topic.id);
+                    const isTopicExpanded = !!expandedTopics[topic.id];
                     return (
                       <div key={topic.id} className="taxonomy-branch">
                         <button
                           className={`taxonomy-node ${selectedTopicId === topic.id && !selectedSubtopicId ? "active" : ""}`}
                           type="button"
-                          onClick={() => chooseTaxonomy(subject.id, topic.id)}
+                          onClick={() => {
+                            chooseTaxonomy(subject.id, topic.id);
+                            setExpandedTopics((prev) => ({ ...prev, [topic.id]: !prev[topic.id] }));
+                          }}
                         >
-                          <ChevronRight size={14} />
+                          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            {isTopicExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </span>
                           <span>{topic.name}</span>
                           <strong>{taxonomyCounts.get(`topic:${topic.id}`) || 0}</strong>
                         </button>
-                        {topicSubtopics.map((subtopic) => (
+                        {isTopicExpanded && topicSubtopics.map((subtopic) => (
                           <button
                             key={subtopic.id}
                             className={`taxonomy-node leaf ${selectedSubtopicId === subtopic.id ? "active" : ""}`}
@@ -666,6 +690,14 @@ export function QuestionBankPage() {
                         <span className="tag">{question.difficulty || "unset"}</span>
                         <span className="tag">{question.marks || 1} mark</span>
                         <span className="tag">{taxonomyPath(question) || "Unmapped taxonomy"}</span>
+                        {question.question_companies?.map((qc) => {
+                          const compName = companies.find((c) => c.id === qc.company_id)?.name || qc.company_id;
+                          return (
+                            <span key={qc.company_id} className="tag" style={{ backgroundColor: "#e0e7ff", color: "#4f46e5", fontWeight: "bold" }}>
+                              {compName}
+                            </span>
+                          );
+                        })}
                       </div>
                       {issues.length ? (
                         <div className="issue-list">
@@ -773,6 +805,133 @@ export function QuestionBankPage() {
                 <option value="hard">Hard</option>
               </select>
               <input type="number" min={0.5} step={0.5} value={form.marks} onChange={(event) => setForm({ ...form, marks: Number(event.target.value) })} />
+            </div>
+
+            <div className="settings-card compact-settings">
+              <h4>Company Mapping</h4>
+              <p className="helper-text" style={{ fontSize: "11px", color: "#64748b" }}>Select companies for recruitment simulation drive mapping.</p>
+              
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "6px 0" }}>
+                {form.companies && form.companies.length > 0 ? (
+                  form.companies.map((compId) => {
+                    const compName = companies.find((c) => c.id === compId)?.name || compId;
+                    return (
+                      <span
+                        key={compId}
+                        className="tag"
+                        style={{
+                          backgroundColor: "#e0e7ff",
+                          color: "#4f46e5",
+                          fontWeight: "bold",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {compName}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextCompanies = (form.companies || []).filter((c) => c !== compId);
+                            setForm({ ...form, companies: nextCompanies });
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#4f46e5",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                            lineHeight: "1",
+                            padding: "0 2px",
+                          }}
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>No companies mapped.</span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    if (selected && !form.companies?.includes(selected)) {
+                      setForm({ ...form, companies: [...(form.companies || []), selected] });
+                    }
+                  }}
+                  style={{ flex: 1, padding: "8px", fontSize: "13px" }}
+                >
+                  <option value="">-- Map to Company --</option>
+                  {companies
+                    .filter((c) => !form.companies?.includes(c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                <input
+                  id="new-company-input"
+                  type="text"
+                  placeholder="New company name"
+                  style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const target = e.currentTarget;
+                      const name = target.value.trim();
+                      if (name) {
+                        try {
+                          const newComp = await api.createCompany(name);
+                          setCompanies((prev) => [...prev, newComp].sort((a, b) => a.name.localeCompare(b.name)));
+                          setForm((curr) => ({
+                            ...curr,
+                            companies: [...(curr.companies || []), newComp.id],
+                          }));
+                          target.value = "";
+                        } catch (err: any) {
+                          alert(err.message || "Failed to add company");
+                        }
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                  onClick={async () => {
+                    const input = document.getElementById("new-company-input") as HTMLInputElement;
+                    const name = input?.value.trim();
+                    if (name) {
+                      try {
+                        const newComp = await api.createCompany(name);
+                        setCompanies((prev) => [...prev, newComp].sort((a, b) => a.name.localeCompare(b.name)));
+                        setForm((curr) => ({
+                          ...curr,
+                          companies: [...(curr.companies || []), newComp.id],
+                        }));
+                        input.value = "";
+                      } catch (err: any) {
+                        alert(err.message || "Failed to add company");
+                      }
+                    }
+                  }}
+                >
+                  Add
+                </button>
+              </div>
             </div>
 
             {form.question_type === "mcq" ? (

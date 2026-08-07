@@ -26,19 +26,17 @@ export default function RouteGuard({ allowedRoles }: RouteGuardProps) {
           return;
         }
 
-        // Try getting role from localStorage or fetch it
+        // Try getting role from database and fallback to localStorage
         let role = localStorage.getItem("user_role");
-        if (!role) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", session.user.id)
-            .single();
-          
-          if (profile && profile.role) {
-            role = profile.role;
-            localStorage.setItem("user_role", profile.role);
-          }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+        
+        if (profile && profile.role) {
+          role = profile.role;
+          localStorage.setItem("user_role", profile.role);
         }
 
         if (active) {

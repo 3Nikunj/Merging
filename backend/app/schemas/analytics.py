@@ -106,3 +106,5 @@ class DashboardStatsResponse(BaseModel):
     coding_total_submissions: int = Field(serialization_alias="codingTotalSubmissions")
     interview_average_score: float = Field(serialization_alias="interviewAverageScore")
     interview_completed_count: int = Field(serialization_alias="interviewCompletedCount")
+    subject_mastery: dict[str, float] = Field(default={}, serialization_alias="subjectMastery")
+

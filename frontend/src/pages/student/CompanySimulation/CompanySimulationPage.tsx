@@ -202,8 +202,16 @@ const COMPANIES: Company[] = [
   },
 ];
 
+interface SimulationQuestion {
+  code: string;
+  options: string[];
+  correct: string;
+  explanation: string;
+}
+
 export default function CompanySimulationPage() {
   const navigate = useNavigate();
+  const [dbQuestions, setDbQuestions] = useState<SimulationQuestion[] | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>(COMPANIES[0]);
   const [activeSimulatorRound, setActiveSimulatorRound] = useState<Round | null>(null);
   
@@ -332,6 +340,7 @@ print sum`,
   ];
 
   const currentQuestionsPool = 
+    (dbQuestions && dbQuestions.length > 0) ? dbQuestions :
     activeSimulatorRound?.type === "pseudocode" ? PSEUDOCODE_QUESTIONS :
     activeSimulatorRound?.type === "cognitive" ? ACCENTURE_COGNITIVE_QUESTIONS :
     activeSimulatorRound?.type === "puzzle" ? INFOSYS_PUZZLE_QUESTIONS : TCS_NQT_QUESTIONS;
@@ -351,6 +360,31 @@ print sum`,
     setCommRecording(false);
     setCommTimer(15);
     setCommResults(null);
+    setDbQuestions(null);
+
+    const mcqTypes = ["pseudocode", "cognitive", "puzzle", "aptitude"];
+    if (mcqTypes.includes(round.type) && !(round.type === "aptitude" && selectedCompany.id === "capgemini")) {
+      setSimLoading(true);
+      try {
+        const res = await api.getCompanySimulationQuestions(selectedCompany.id, round.type);
+        if (res.questions && res.questions.length > 0) {
+          const mapped = res.questions.map((q: any) => {
+            const correctOption = q.question_options?.find((o: any) => o.is_correct);
+            return {
+              code: q.prompt,
+              options: q.question_options?.map((o: any) => o.option_text) || [],
+              correct: correctOption ? correctOption.option_text : "",
+              explanation: q.metadata?.explanation || "No explanation provided."
+            };
+          });
+          setDbQuestions(mapped);
+        }
+      } catch (error) {
+        console.error("Failed to load company simulation questions:", error);
+      } finally {
+        setSimLoading(false);
+      }
+    }
   };
 
   // Memory grid logic (Capgemini Aptitude)
@@ -721,7 +755,14 @@ print sum`,
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 bg-practice-background">
-              {simStep === "intro" && (
+              {simLoading ? (
+                <div className="space-y-4 text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent mx-auto" />
+                  <p className="text-sm font-semibold text-practice-subdued">Fetching drive simulation questions...</p>
+                </div>
+              ) : (
+                <>
+                  {simStep === "intro" && (
                 <div className="space-y-6 text-center py-6">
                   <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-practice-amber/20 text-practice-amberDark">
                     <Sparkles className="h-8 w-8" />
@@ -817,7 +858,7 @@ print sum`,
                       </div>
 
                       <div className="grid grid-cols-1 gap-4">
-                        {currentQuestionsPool[mcqIndex].options.map((opt) => {
+                        {currentQuestionsPool[mcqIndex].options.map((opt: string) => {
                           const isCorrect = opt === currentQuestionsPool[mcqIndex].correct;
                           const isSelected = selectedMcqAnswer === opt;
                           
@@ -1020,7 +1061,8 @@ print sum`,
                   </div>
                 </div>
               )}
-
+                </>
+              )}
             </div>
           </div>
         </div>

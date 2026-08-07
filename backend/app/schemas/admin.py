@@ -140,6 +140,8 @@ class QuestionCreate(BaseModel):
     metadata: dict = Field(default_factory=dict)
     options: list[QuestionOptionCreate] = Field(default_factory=list)
     coding_test_cases: list[CodingTestCaseCreate] = Field(default_factory=list)
+    companies: list[str] = Field(default_factory=list)
+
 
 
 class QuestionUpdate(QuestionCreate):

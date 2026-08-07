@@ -206,10 +206,15 @@ function DashboardPage() {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1">
                   <span className="text-practice-text">Quantitative Aptitude</span>
-                  <span className="text-practice-sidebar">75%</span>
+                  <span className="text-practice-sidebar">
+                    {stats.subjectMastery?.["aptitude"] !== undefined ? `${Math.round(stats.subjectMastery["aptitude"])}%` : "75%"}
+                  </span>
                 </div>
                 <div className="h-3 w-full bg-practice-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-practice-amber rounded-full" style={{ width: "75%" }} />
+                  <div 
+                    className="h-full bg-practice-amber rounded-full" 
+                    style={{ width: `${stats.subjectMastery?.["aptitude"] !== undefined ? stats.subjectMastery["aptitude"] : 75}%` }} 
+                  />
                 </div>
               </div>
 
@@ -217,10 +222,15 @@ function DashboardPage() {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1">
                   <span className="text-practice-text">Logical Reasoning</span>
-                  <span className="text-practice-sidebar">40%</span>
+                  <span className="text-practice-sidebar">
+                    {stats.subjectMastery?.["reasoning"] !== undefined ? `${Math.round(stats.subjectMastery["reasoning"])}%` : "40%"}
+                  </span>
                 </div>
                 <div className="h-3 w-full bg-practice-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-practice-sidebarActive rounded-full" style={{ width: "40%" }} />
+                  <div 
+                    className="h-full bg-practice-sidebarActive rounded-full" 
+                    style={{ width: `${stats.subjectMastery?.["reasoning"] !== undefined ? stats.subjectMastery["reasoning"] : 40}%` }} 
+                  />
                 </div>
               </div>
 
@@ -228,10 +238,15 @@ function DashboardPage() {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1">
                   <span className="text-practice-text">Computer Science Foundations</span>
-                  <span className="text-practice-sidebar">85%</span>
+                  <span className="text-practice-sidebar">
+                    {stats.subjectMastery?.["verbal"] !== undefined ? `${Math.round(stats.subjectMastery["verbal"])}%` : "85%"}
+                  </span>
                 </div>
                 <div className="h-3 w-full bg-practice-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-practice-sidebar rounded-full" style={{ width: "85%" }} />
+                  <div 
+                    className="h-full bg-practice-sidebar rounded-full" 
+                    style={{ width: `${stats.subjectMastery?.["verbal"] !== undefined ? stats.subjectMastery["verbal"] : 85}%` }} 
+                  />
                 </div>
               </div>
 
@@ -239,10 +254,15 @@ function DashboardPage() {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1">
                   <span className="text-practice-text">Data Structures & Core Coding</span>
-                  <span className="text-practice-sidebar">55%</span>
+                  <span className="text-practice-sidebar">
+                    {stats.subjectMastery?.["coding"] !== undefined ? `${Math.round(stats.subjectMastery["coding"])}%` : "55%"}
+                  </span>
                 </div>
                 <div className="h-3 w-full bg-practice-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full" style={{ width: "55%" }} />
+                  <div 
+                    className="h-full bg-green-500 rounded-full" 
+                    style={{ width: `${stats.subjectMastery?.["coding"] !== undefined ? stats.subjectMastery["coding"] : 55}%` }} 
+                  />
                 </div>
               </div>
             </div>

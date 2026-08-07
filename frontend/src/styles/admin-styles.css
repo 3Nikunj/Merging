@@ -672,8 +672,15 @@
 
 .action-row {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.question-row .action-row {
+  position: absolute;
+  top: 14px;
+  right: 14px;
 }
 
 .clickable-item {
@@ -1180,7 +1187,7 @@
 .taxonomy-node {
   display: grid;
   width: 100%;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   border: 1px solid transparent;
@@ -1228,9 +1235,8 @@
 }
 
 .question-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  position: relative;
+  display: block;
   border: 1px solid #eee3cd;
   border-radius: var(--admin-radius);
   background: #fffef9;
@@ -1250,6 +1256,7 @@
 .question-row-main strong {
   color: var(--admin-text);
   font-size: 16px;
+  padding-right: 140px;
 }
 
 .question-row-main p {

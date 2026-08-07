@@ -78,7 +78,7 @@ def _validate_question_payload(payload: QuestionCreate) -> None:
 
 
 def _canonical_question_data(client, payload: QuestionCreate) -> dict:
-    data = payload.model_dump(exclude={"options", "coding_test_cases"})
+    data = payload.model_dump(exclude={"options", "coding_test_cases", "companies"})
     data["question_type"] = _normalize_question_type(payload.question_type)
     data["status"] = _normalize_question_status(payload.status)
 
@@ -144,9 +144,16 @@ def _create_question_record(client, payload: QuestionCreate):
         ]
         client.table("coding_test_cases").insert(test_case_payload).execute()
 
+    if payload.companies:
+        companies_payload = [
+            {"question_id": question["id"], "company_id": company}
+            for company in payload.companies
+        ]
+        client.table("question_companies").insert(companies_payload).execute()
+
     full_question = (
         client.table("questions")
-        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*)")
+        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*), question_companies(company_id)")
         .eq("id", question["id"])
         .limit(1)
         .execute()
@@ -875,7 +882,7 @@ def list_questions(question_type: str | None = None):
     client = get_supabase_admin()
     query = (
         client.table("questions")
-        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*)")
+        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*), question_companies(company_id)")
         .order("created_at", desc=True)
     )
     if question_type:
@@ -889,7 +896,7 @@ def audit_questions():
     client = get_supabase_admin()
     questions = (
         client.table("questions")
-        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*)")
+        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*), question_companies(company_id)")
         .order("created_at", desc=True)
         .execute()
         .data
@@ -977,6 +984,7 @@ def update_question(question_id: str, payload: QuestionUpdate):
 
     client.table("question_options").delete().eq("question_id", question_id).execute()
     client.table("coding_test_cases").delete().eq("question_id", question_id).execute()
+    client.table("question_companies").delete().eq("question_id", question_id).execute()
 
     if question_data["question_type"] == "mcq" and payload.options:
         options_payload = [
@@ -1003,9 +1011,16 @@ def update_question(question_id: str, payload: QuestionUpdate):
         ]
         client.table("coding_test_cases").insert(test_case_payload).execute()
 
+    if payload.companies:
+        companies_payload = [
+            {"question_id": question_id, "company_id": company}
+            for company in payload.companies
+        ]
+        client.table("question_companies").insert(companies_payload).execute()
+
     full_question = (
         client.table("questions")
-        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*)")
+        .select("*, subjects(name), topics(name, subject_id), subtopics(name, topic_id), question_options(*), coding_test_cases(*), question_companies(company_id)")
         .eq("id", question_id)
         .limit(1)
         .execute()
@@ -1023,3 +1038,42 @@ def delete_question(question_id: str):
     client.table("programming_problems").delete().eq("question_id", question_id).execute()
     client.table("questions").delete().eq("id", question_id).execute()
     return {"deleted": True}
+
+
+from pydantic import BaseModel
+
+class CompanyCreate(BaseModel):
+    name: str
+
+@router.get("/companies")
+def list_companies():
+    client = get_supabase_admin()
+    res = client.table("companies").select("*").order("name").execute()
+    mapped_items = [{"id": item["slug"], "name": item["name"]} for item in res.data if item.get("slug")]
+    return {"items": mapped_items}
+
+
+@router.post("/companies")
+def create_company(payload: CompanyCreate):
+    client = get_supabase_admin()
+    company_name = payload.name.strip()
+    if not company_name:
+        raise HTTPException(status_code=400, detail="Company name cannot be empty")
+    
+    import re
+    company_id = re.sub(r'[^a-z0-9]+', '-', company_name.lower()).strip('-')
+    
+    # Check if already exists
+    exists_check = client.table("companies").select("id").eq("slug", company_id).execute()
+    if exists_check.data:
+        raise HTTPException(status_code=400, detail="Company already exists")
+        
+    res = client.table("companies").insert({"slug": company_id, "name": company_name}).execute()
+    
+    # Return formatted response
+    if res.data:
+        # Map DB column 'slug' to 'id' for frontend compatibility
+        new_company = res.data[0]
+        return {"id": new_company["slug"], "name": new_company["name"]}
+    raise HTTPException(status_code=500, detail="Failed to create company")
+

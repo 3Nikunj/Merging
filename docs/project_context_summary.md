@@ -42,3 +42,28 @@ During this session, we migrated speech synthesis to a browser-native execution 
 * **Dynamic Test ID Resolution**: Resolved default `testId` reference on the Selection Page to find the correct test matching the user's selected Topic ID (falling back to Subject ID) from the active tests list.
 * **Human-Readable Labels**: Modified navigation hooks to forward human-readable subject and topic titles, preventing database UUID strings from rendering on the Instructions summary cards.
 
+### 5. Dynamic Company Mapping for Question Bank (2026-08-06)
+* **Database Schema**: Created `question_companies` join table referencing `companies(slug)` with cascade deletes. Seeded default companies (TCS, Wipro, Accenture, Cognizant, IBM, Capgemini, Infosys).
+* **Backend API**: Added `GET /admin/companies` and `POST /admin/companies` endpoints for listing and creating companies dynamically.
+* **Admin UI Overhaul**: Replaced hardcoded company checkboxes with a dynamic select dropdown, removable tag chips, and an inline "Add new company" input that creates companies in the database on-the-fly.
+
+### 6. Admin UI Layout & Interaction Fixes (2026-08-06)
+* **Content Queue Cards**: Repositioned Edit/Delete buttons to the top-right corner using absolute positioning, allowing question content to span full card width.
+* **Taxonomy Tree**: Added expand/collapse toggle behavior to Subject and Topic nodes with dynamic ChevronRight/ChevronDown indicators.
+
+### 7. Practice Test Adaptive Engine Bug Fix (2026-08-06)
+* **Root Cause**: The adaptive question engine filtered by `status = 'published'`, but the database constraint only allowed `['draft', 'active', 'archived']`. All questions were `draft`, so the engine found zero candidates and silently fell back to hardcoded aptitude mock data — serving wrong-subject questions.
+* **Database Fix**: Updated `questions_status_check` constraint to include `'published'` and `'review'`. Seeded published MCQ questions for Coding/Data Structures/Arrays.
+* **Backend Fix**: `start_attempt()` now validates test existence and published question availability before starting. Errors are raised as `HTTPException` instead of being silently swallowed.
+* **Frontend Fix**: Selection page disables "Continue" when the selected subtopic has 0 questions and displays a warning.
+
+### 8. Authentication Token Fix (2026-08-06)
+* **JWT Attachment**: Updated the `api()` fetch wrapper to attach `Authorization: Bearer <token>` from `supabase.auth.getSession()` on every request.
+* **401 Interceptor**: Added global 401 handler that clears local storage, signs out of Supabase, and redirects to `/login`.
+
+---
+
+## 📄 Detailed Changelogs
+
+- [2026-08-06 Session Changelog](./changelog_2026_08_06.md): Dynamic company mapping, admin UI fixes, practice test bug fix, auth token fix.
+

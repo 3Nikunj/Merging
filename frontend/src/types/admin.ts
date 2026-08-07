@@ -103,6 +103,7 @@ export interface QuestionItem {
   subtopics?: { name: string; topic_id?: string } | null;
   question_options?: QuestionOption[];
   coding_test_cases?: CodingTestCase[];
+  question_companies?: { company_id: string }[];
 }
 
 export interface QuestionOption {
