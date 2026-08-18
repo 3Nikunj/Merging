@@ -6,10 +6,12 @@ import StatusBadge from "../../../components/student/testFlow/StatusBadge";
 import { answerReview, resultBreakdown, selectedTest } from "../../../data/testFlow";
 import { api, type AttemptResultResponse } from "../../../services/api";
 import { useSearchParams } from "react-router-dom";
+import type { AnswerReviewRow } from "../../../types/testFlow";
 
 function ResultsPage() {
   const [searchParams] = useSearchParams();
   const attemptId = searchParams.get("attemptId") ?? "demo-attempt";
+  const [selectedReview, setSelectedReview] = useState<AnswerReviewRow | null>(null);
   const [result, setResult] = useState<AttemptResultResponse>({
     attemptId,
     title: selectedTest.title,
@@ -53,7 +55,10 @@ function ResultsPage() {
             >
               Retry Test
             </Link>
-            <button className="rounded-lg bg-practice-amberDark px-5 py-3 text-sm font-extrabold text-white transition-all duration-200 hover:bg-practice-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-background">
+            <button
+              onClick={() => window.print()}
+              className="rounded-lg bg-practice-amberDark px-5 py-3 text-sm font-extrabold text-white transition-all duration-200 hover:bg-practice-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-background"
+            >
               Download Result
             </button>
           </div>
@@ -64,7 +69,7 @@ function ResultsPage() {
             <div
               className="mx-auto flex h-32 w-32 items-center justify-center rounded-full"
               style={{
-                background: "conic-gradient(#7d5700 78%, #f3f3f4 0)",
+                background: `conic-gradient(#7d5700 ${result.overallScore}%, #f3f3f4 0)`,
               }}
             >
               <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white">
@@ -196,7 +201,10 @@ function ResultsPage() {
                     </td>
                     <td className="px-6 py-5">{row.topic}</td>
                     <td className="px-6 py-5">
-                      <button className="font-extrabold text-practice-amberDark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber rounded px-1">
+                      <button
+                        onClick={() => setSelectedReview(row)}
+                        className="font-extrabold text-practice-amberDark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber rounded px-1"
+                      >
                         View Explanation
                       </button>
                     </td>
@@ -210,6 +218,90 @@ function ResultsPage() {
           </div>
         </section>
       </main>
+      {selectedReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-practice-line overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-practice-sidebar text-white p-5 flex justify-between items-center">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-white/60 font-extrabold">Question Review</p>
+                <h3 className="text-xl font-black">Question {selectedReview.id} Explanation</h3>
+              </div>
+              <button
+                onClick={() => setSelectedReview(null)}
+                className="text-white/70 hover:text-white font-extrabold text-sm border border-white/20 rounded-lg px-3 py-1 hover:bg-white/10 transition"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-practice-background space-y-6">
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-practice-subdued mb-2">Question Prompt</h4>
+                <p className="text-base font-bold text-practice-ink bg-white p-4 rounded-xl border border-practice-line">
+                  {selectedReview.questionText || selectedReview.preview}
+                </p>
+              </div>
+
+              {selectedReview.options && selectedReview.options.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-practice-subdued mb-3">Options</h4>
+                  <div className="space-y-3">
+                    {selectedReview.options.map((opt) => {
+                      const isCorrect = opt.id === selectedReview.correctOptionId || opt.isCorrect;
+                      const isSelected = opt.id === selectedReview.selectedOptionId;
+
+                      let borderClass = "border-practice-line bg-white";
+                      let badge = null;
+
+                      if (isCorrect && isSelected) {
+                        borderClass = "border-emerald-500 bg-emerald-50 text-emerald-900";
+                        badge = <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-extrabold text-white">✓ Correct & Your Choice</span>;
+                      } else if (isCorrect) {
+                        borderClass = "border-emerald-500 bg-emerald-50/50 text-emerald-950";
+                        badge = <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700">✓ Correct Option</span>;
+                      } else if (isSelected) {
+                        borderClass = "border-rose-500 bg-rose-50 text-rose-900";
+                        badge = <span className="rounded bg-rose-600 px-2 py-0.5 text-[10px] font-extrabold text-white">✗ Your Choice</span>;
+                      }
+
+                      return (
+                        <div
+                          key={opt.id}
+                          className={`flex items-center justify-between border-2 p-4 rounded-xl font-bold transition duration-200 ${borderClass}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-practice-muted text-xs font-extrabold text-practice-subdued uppercase">
+                              {opt.optionKey}
+                            </span>
+                            <span>{opt.optionText}</span>
+                          </div>
+                          {badge}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-practice-subdued mb-2">Explanation</h4>
+                <div className="bg-practice-amber/10 border border-practice-amber/20 rounded-xl p-5 text-sm text-[#2d2f34] leading-relaxed">
+                  {selectedReview.explanation || "No explanation available for this question."}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-practice-muted border-t border-practice-line flex justify-end">
+              <button
+                onClick={() => setSelectedReview(null)}
+                className="rounded-lg bg-practice-ink px-5 py-2.5 text-sm font-extrabold text-white transition hover:opacity-90"
+              >
+                Close Explanation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

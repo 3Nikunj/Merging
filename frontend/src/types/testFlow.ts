@@ -57,9 +57,21 @@ export interface ResultBreakdown {
   score: number;
 }
 
+export interface ReviewOption {
+  id: string;
+  optionKey: string;
+  optionText: string;
+  isCorrect: boolean;
+}
+
 export interface AnswerReviewRow {
   id: string;
   preview: string;
   status: "Correct" | "Incorrect" | "Skipped";
   topic: string;
+  questionText?: string;
+  options?: ReviewOption[];
+  selectedOptionId?: string;
+  correctOptionId?: string;
+  explanation?: string;
 }

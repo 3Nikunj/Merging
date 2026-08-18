@@ -10,11 +10,24 @@ class ResultBreakdown(BaseModel):
     score: int
 
 
+
+class ReviewOption(BaseModel):
+    id: str
+    option_key: str = Field(serialization_alias="optionKey")
+    option_text: str = Field(serialization_alias="optionText")
+    is_correct: bool = Field(serialization_alias="isCorrect")
+
+
 class AnswerReviewRow(BaseModel):
     id: str
     preview: str
     status: ReviewStatus
     topic: str
+    question_text: str | None = Field(default=None, serialization_alias="questionText")
+    options: list[ReviewOption] | None = None
+    selected_option_id: str | None = Field(default=None, serialization_alias="selectedOptionId")
+    correct_option_id: str | None = Field(default=None, serialization_alias="correctOptionId")
+    explanation: str | None = None
 
 
 class AttemptResult(BaseModel):

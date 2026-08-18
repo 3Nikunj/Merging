@@ -25,6 +25,9 @@ function LiveTestPage() {
   const [question, setQuestion] = useState<LiveQuestion>(liveQuestion);
   const [totalQuestions, setTotalQuestions] = useState(selectedTest.questions);
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [testTitle, setTestTitle] = useState(selectedTest.title);
+  const [subjectTitle, setSubjectTitle] = useState(selectedTest.subject);
+  const [topicTitle, setTopicTitle] = useState(selectedTest.topic);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -48,6 +51,9 @@ function LiveTestPage() {
         setMarked(response.markedQuestions);
         setTotalQuestions(response.totalQuestions);
         setAnsweredCount(response.attempt.answeredCount);
+        if (response.testTitle) setTestTitle(response.testTitle);
+        if (response.subjectTitle) setSubjectTitle(response.subjectTitle);
+        if (response.topicTitle) setTopicTitle(response.topicTitle);
       })
       .catch(() => undefined);
   }, [attemptId, currentQuestion]);
@@ -114,7 +120,7 @@ function LiveTestPage() {
       <header className="fixed left-0 top-0 z-50 flex h-[72px] w-full items-center justify-between border-b border-white/10 bg-practice-sidebar px-4 text-white lg:px-6">
         <div>
           <p className="text-xl font-extrabold text-practice-amber">AiValytics</p>
-          <p className="text-sm text-white/65">{selectedTest.title}</p>
+          <p className="text-sm text-white/65">{testTitle}</p>
         </div>
         <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-white/5 px-6 py-2 sm:flex">
           <Clock3 className="h-4 w-4 text-practice-amber" aria-hidden="true" />
@@ -197,7 +203,7 @@ function LiveTestPage() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="mx-auto max-w-[800px] space-y-6">
             <div className="text-sm font-semibold text-practice-subdued">
-              {selectedTest.subject} &gt; {selectedTest.topic}
+              {subjectTitle} &gt; {topicTitle}
             </div>
 
             <section className="rounded-lg border border-practice-line bg-white p-6 shadow-dashboard">

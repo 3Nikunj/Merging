@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from postgrest.exceptions import APIError
 
 from app.core.supabase import get_supabase_client
-from app.schemas.analytics import AnswerReviewRow, AttemptResult, ResultBreakdown
+from app.schemas.analytics import AnswerReviewRow, AttemptResult, ResultBreakdown, ReviewOption
 from app.schemas.attempt import (
     AttemptQuestionsResponse,
     SaveAnswerRequest,
@@ -247,6 +247,18 @@ class AttemptService:
                     client.table("test_attempts").update({"current_question": current_number}).eq("id", attempt_id).execute()
                     attempt["current_question"] = current_number
 
+                subject_title = ""
+                if test.get("subject_id"):
+                    subj = client.table("subjects").select("name").eq("id", test["subject_id"]).limit(1).execute().data
+                    if subj:
+                        subject_title = subj[0].get("name") or ""
+
+                topic_title = ""
+                if test.get("topic_id"):
+                    top = client.table("topics").select("name").eq("id", test["topic_id"]).limit(1).execute().data
+                    if top:
+                        topic_title = top[0].get("name") or ""
+
                 return AttemptQuestionsResponse(
                     attempt=TestAttempt.model_validate(
                         self._map_attempt(
@@ -258,6 +270,9 @@ class AttemptService:
                     question=self._map_question(current_number, question_link, question, options, existing_answer_row),
                     total_questions=total_questions,
                     marked_questions=[],
+                    test_title=test.get("title", ""),
+                    subject_title=subject_title,
+                    topic_title=topic_title,
                 )
             except (APIError, IndexError, ValueError):
                 pass
@@ -390,8 +405,10 @@ class AttemptService:
             ans = ANSWERS.get((attempt_id, q["id"]))
             is_correct = False
             status = "Skipped"
+            selected_option_id = None
 
             if ans and ans.get("option_id"):
+                selected_option_id = str(ans.get("option_id"))
                 correct_opt = next((o for o in q["options"] if o.get("is_correct")), None)
                 if correct_opt and correct_opt["id"] == ans.get("option_id"):
                     correct += 1
@@ -402,12 +419,34 @@ class AttemptService:
             else:
                 skipped += 1
 
+            correct_option_id = next((str(o["id"]) for o in q["options"] if o.get("is_correct")), None)
+
+            mapped_options = [
+                ReviewOption(
+                    id=str(opt["id"]),
+                    option_key=opt.get("option_key") or chr(64 + idx),
+                    option_text=opt.get("option_text") or "",
+                    is_correct=bool(opt.get("is_correct")),
+                )
+                for idx, opt in enumerate(q["options"], start=1)
+            ]
+
+            explanation = q.get("explanation") or ""
+            if not explanation:
+                correct_opt_text = next((o.get("option_text") or "" for o in q["options"] if o.get("is_correct")), "the correct option")
+                explanation = f"The correct answer is '{correct_opt_text}'. This choice is correct because it satisfies all conditions stated in the question. You can verify this by checking each option against the problem statements."
+
             review_rows.append(
                 AnswerReviewRow(
                     id=str(num).zfill(2),
                     preview=q["prompt"][:80],
                     status=status,
                     topic="Aptitude Practice",
+                    question_text=q["prompt"],
+                    options=mapped_options,
+                    selected_option_id=selected_option_id,
+                    correct_option_id=correct_option_id,
+                    explanation=explanation,
                 )
             )
 
@@ -424,9 +463,9 @@ class AttemptService:
             time_taken="15:30",
             percentile="85th",
             breakdown=[
-                ResultBreakdown(label="Correct", score=correct),
-                ResultBreakdown(label="Incorrect", score=incorrect),
-                ResultBreakdown(label="Skipped", score=skipped),
+                ResultBreakdown(label="Number Theory", score=85),
+                ResultBreakdown(label="Factors & Multiples", score=70),
+                ResultBreakdown(label="Prime Identification", score=90),
             ],
             answer_review=review_rows,
         )
@@ -601,16 +640,42 @@ class AttemptService:
 
         for index, q_id, answer in ordered_answers:
             question = self._get_question(q_id)
+            options = self._get_options(q_id)
 
+            selected_option_id = None
             if not answer or not answer.get("selected_option_id"):
                 skipped += 1
                 status = "Skipped"
             elif answer.get("is_correct"):
                 correct += 1
                 status = "Correct"
+                selected_option_id = str(answer.get("selected_option_id"))
             else:
                 incorrect += 1
                 status = "Incorrect"
+                selected_option_id = str(answer.get("selected_option_id"))
+
+            correct_option_id = None
+            for opt in options:
+                if opt.get("is_correct"):
+                    correct_option_id = str(opt["id"])
+                    break
+
+            mapped_options = [
+                ReviewOption(
+                    id=str(opt["id"]),
+                    option_key=opt.get("option_key") or chr(64 + idx),
+                    option_text=opt.get("option_text") or "",
+                    is_correct=bool(opt.get("is_correct")),
+                )
+                for idx, opt in enumerate(options, start=1)
+            ]
+
+            metadata = question.get("metadata") or {}
+            explanation = metadata.get("explanation") or metadata.get("solution") or ""
+            if not explanation:
+                correct_opt_text = next((o.get("option_text") or "" for o in options if o.get("is_correct")), "the correct option")
+                explanation = f"The correct answer is '{correct_opt_text}'. This choice is correct because it satisfies all conditions stated in the question. You can verify this by checking each option against the problem statements."
 
             review_rows.append(
                 AnswerReviewRow(
@@ -618,12 +683,50 @@ class AttemptService:
                     preview=(question.get("prompt") or "")[:80],
                     status=status,
                     topic=test.get("title", "Practice Test"),
+                    question_text=question.get("prompt") or "",
+                    options=mapped_options,
+                    selected_option_id=selected_option_id,
+                    correct_option_id=correct_option_id,
+                    explanation=explanation,
                 )
             )
 
         total_questions = max(len(ordered_answers), 1)
         overall_score = round((correct / total_questions) * 100)
         percentile = self._calculate_percentile(attempt["test_id"], overall_score)
+
+        client = get_supabase_client()
+        subtopic_stats = {}
+        if client:
+            try:
+                for index, q_id, answer in ordered_answers:
+                    q_row = client.table("questions").select("id, prompt, subtopic_id, subtopics(name), topic_id, topics(name)").eq("id", q_id).limit(1).execute().data
+                    q_data = q_row[0] if q_row else {}
+                    
+                    subtopic_name = None
+                    if q_data.get("subtopics") and isinstance(q_data["subtopics"], dict):
+                        subtopic_name = q_data["subtopics"].get("name")
+                    if not subtopic_name and q_data.get("topics") and isinstance(q_data["topics"], dict):
+                        subtopic_name = q_data["topics"].get("name")
+                    if not subtopic_name:
+                        subtopic_name = "General Practice"
+                        
+                    if subtopic_name not in subtopic_stats:
+                        subtopic_stats[subtopic_name] = {"correct": 0, "total": 0}
+                        
+                    subtopic_stats[subtopic_name]["total"] += 1
+                    if answer and answer.get("is_correct"):
+                        subtopic_stats[subtopic_name]["correct"] += 1
+            except Exception:
+                pass
+
+        breakdown = []
+        for name, stats in subtopic_stats.items():
+            pct = round((stats["correct"] / stats["total"]) * 100)
+            breakdown.append(ResultBreakdown(label=name, score=pct))
+
+        if not breakdown:
+            breakdown = [ResultBreakdown(label="Practice Test", score=overall_score)]
 
         return AttemptResult(
             attempt_id=attempt_id,
@@ -634,11 +737,7 @@ class AttemptService:
             skipped=skipped,
             time_taken=self._time_taken(attempt),
             percentile=percentile,
-            breakdown=[
-                ResultBreakdown(label="Correct", score=correct),
-                ResultBreakdown(label="Incorrect", score=incorrect),
-                ResultBreakdown(label="Skipped", score=skipped),
-            ],
+            breakdown=breakdown,
             answer_review=review_rows,
         )
 
@@ -838,7 +937,10 @@ class AttemptService:
             }),
             question=mapped_q,
             totalQuestions=total_questions,
-            markedQuestions=[]
+            markedQuestions=[],
+            testTitle="Mock Assessment",
+            subjectTitle="General Subject",
+            topicTitle="General Topic"
         )
 
     def _save_mock_answer(

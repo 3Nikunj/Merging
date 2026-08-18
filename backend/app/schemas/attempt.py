@@ -43,6 +43,9 @@ class AttemptQuestionsResponse(BaseModel):
     question: LiveQuestion
     total_questions: int = Field(serialization_alias="totalQuestions")
     marked_questions: list[int] = Field(serialization_alias="markedQuestions")
+    test_title: str | None = Field(default=None, serialization_alias="testTitle")
+    subject_title: str | None = Field(default=None, serialization_alias="subjectTitle")
+    topic_title: str | None = Field(default=None, serialization_alias="topicTitle")
 
 
 class SaveAnswerRequest(BaseModel):

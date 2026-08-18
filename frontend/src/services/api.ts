@@ -49,6 +49,9 @@ export interface AttemptQuestionsResponse {
   question: LiveQuestion;
   totalQuestions: number;
   markedQuestions: number[];
+  testTitle?: string;
+  subjectTitle?: string;
+  topicTitle?: string;
 }
 
 export interface AttemptResultResponse {
