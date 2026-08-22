@@ -41,7 +41,7 @@ class AiInterviewService:
         }
         
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "openai/gpt-oss-120b",
             "messages": messages,
             "temperature": 0.3,
             "stream": True
@@ -79,9 +79,10 @@ class AiInterviewService:
             "Content-Type": "application/json"
         }
         
-        # Use llama-3.3-70b-versatile for high quality JSON outputs
+        # Use openai/gpt-oss-120b for high quality JSON outputs
+        # (llama-3.3-70b-versatile was deprecated by Groq on 2026-06-17)
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "openai/gpt-oss-120b",
             "messages": messages,
             "temperature": 0.3,
         }

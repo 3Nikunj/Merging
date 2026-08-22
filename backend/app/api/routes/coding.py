@@ -28,7 +28,10 @@ class SubmitCodeRequest(BaseModel):
 
 
 @router.post("/run")
-def execute_code(body: RunCodeRequest) -> dict:
+def execute_code(
+    body: RunCodeRequest,
+    current_user_id: AuthenticatedUserId,
+) -> dict:
     """Run submitted Python/JS/Java/C++ code without persisting it."""
     return run_code(
         problem_id=body.problemId,
