@@ -53,6 +53,7 @@ export const topics: SelectionItem[] = [
     progress: 0,
     average: "N/A",
     questions: 120,
+  },
 ];
 export const subtopics: SelectionItem[] = [
   {
