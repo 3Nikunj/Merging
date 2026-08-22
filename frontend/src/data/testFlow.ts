@@ -31,7 +31,6 @@ export const subjects: SelectionItem[] = [
     questions: 2100,
   },
 ];
-
 export const topics: SelectionItem[] = [
   {
     id: "number-systems",
@@ -54,9 +53,7 @@ export const topics: SelectionItem[] = [
     progress: 0,
     average: "N/A",
     questions: 120,
-  },
 ];
-
 export const subtopics: SelectionItem[] = [
   {
     id: "prime-factors",
@@ -81,7 +78,6 @@ export const subtopics: SelectionItem[] = [
     questions: 68,
   },
 ];
-
 export const selectedTest: TestSummary = {
   subject: "Quantitative Aptitude",
   topic: "Number Systems",
@@ -95,7 +91,6 @@ export const selectedTest: TestSummary = {
   attemptsAllowed: 3,
   bestScore: "72%",
 };
-
 export const liveQuestion: LiveQuestion = {
   id: 12,
   points: 4,
@@ -108,7 +103,6 @@ export const liveQuestion: LiveQuestion = {
     { id: "d", label: "D", value: "72" },
   ],
 };
-
 export const codingProblem: CodingProblem = {
   id: "001",
   title: "Two Sum",
@@ -139,13 +133,11 @@ export const codingProblem: CodingProblem = {
     "            diff = target - n",
   ],
 };
-
 export const resultBreakdown: ResultBreakdown[] = [
   { label: "Number Theory", score: 85 },
   { label: "Factors & Multiples", score: 70 },
   { label: "Prime Identification", score: 90 },
 ];
-
 export const answerReview: AnswerReviewRow[] = [
   {
     id: "01",
