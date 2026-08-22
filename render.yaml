@@ -1,0 +1,54 @@
+# Render Blueprint Specification
+# Doc: https://render.com/docs/blueprints
+
+services:
+  # 1. FastAPI Backend Service (Docker Web Service)
+  - type: web
+    name: aivalytics-backend
+    env: docker
+    plan: free
+    rootDirectory: backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: FRONTEND_ORIGIN
+        fromService:
+          name: aivalytics-frontend
+          type: web
+          property: url
+      - key: FRONTEND_ORIGINS
+        fromService:
+          name: aivalytics-frontend
+          type: web
+          property: url
+      - key: SUPABASE_URL
+        sync: false # User will provide this in Render Dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # User will provide this in Render Dashboard
+      - key: DATABASE_URL
+        sync: false # User will provide this in Render Dashboard
+      - key: GROQ_API_KEY
+        sync: false # User will provide this in Render Dashboard
+      - key: PORT
+        value: 8000
+
+  # 2. React Frontend Service (Static Site Web Service)
+  - type: web
+    name: aivalytics-frontend
+    env: static
+    plan: free
+    rootDirectory: frontend
+    buildCommand: npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: aivalytics-backend
+          type: web
+          property: url
+      - key: VITE_SUPABASE_URL
+        sync: false # User will provide this in Render Dashboard
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false # User will provide this in Render Dashboard

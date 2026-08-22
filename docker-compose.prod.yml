@@ -1,0 +1,122 @@
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: aivalytics-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app
+    depends_on:
+      - frontend
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aivalytics-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - SANDBOX_EXECUTOR_URL=http://sandbox-executor:8080
+    networks:
+      - app
+      - sandbox-control
+    depends_on:
+      sandbox-executor:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+
+  sandbox-runtime:
+    build:
+      context: ./executor/runtime
+      dockerfile: Dockerfile
+    image: ${SANDBOX_IMAGE:-aivalytics-python-sandbox:local}
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  sandbox-executor:
+    build:
+      context: ./executor
+      dockerfile: Dockerfile
+    container_name: aivalytics-sandbox-executor
+    restart: unless-stopped
+    environment:
+      - SANDBOX_EXECUTOR_TOKEN=${SANDBOX_EXECUTOR_TOKEN:?Set SANDBOX_EXECUTOR_TOKEN}
+      - SANDBOX_IMAGE=${SANDBOX_IMAGE:-aivalytics-python-sandbox:local}
+      - SANDBOX_RUNTIME=${SANDBOX_RUNTIME:-runsc}
+      - SANDBOX_ALLOW_NATIVE_RUNTIME=false
+      - SANDBOX_MAX_CONCURRENT=${SANDBOX_MAX_CONCURRENT:-4}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sandbox-control
+    depends_on:
+      sandbox-runtime:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Set VITE_API_BASE_URL}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Set VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Set VITE_SUPABASE_ANON_KEY}
+    container_name: aivalytics-frontend
+    restart: unless-stopped
+    networks:
+      - app
+    depends_on:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=16m
+      - /var/run:rw,noexec,nosuid,nodev,size=1m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app:
+  sandbox-control:
+    internal: true

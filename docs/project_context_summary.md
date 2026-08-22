@@ -63,7 +63,11 @@ During this session, we migrated speech synthesis to a browser-native execution 
 
 ---
 
-## 📄 Detailed Changelogs
+## 📄 Detailed Changelogs & Documentation
 
+- [Student Assessment & Seeding](./student_features_and_seeding.md): Company Simulation modules, standard Live Test engine structure, and PostgreSQL database seeding/inspector scripts.
+- [Production Deployment Strategy](./deployment_strategy.md): Recommended VPC network architecture, hosting providers, scaling rules, and secure sandbox configurations.
 - [2026-08-06 Session Changelog](./changelog_2026_08_06.md): Dynamic company mapping, admin UI fixes, practice test bug fix, auth token fix.
+
+
 

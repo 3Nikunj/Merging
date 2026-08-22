@@ -1,0 +1,12 @@
+# Caddy Configuration File
+# Replace 'yourdomain.com' with your actual domain name.
+
+# Frontend Domain Routing
+yourdomain.com, www.yourdomain.com {
+    reverse_proxy frontend:8080
+}
+
+# Backend API Subdomain Routing
+api.yourdomain.com {
+    reverse_proxy backend:8000
+}
