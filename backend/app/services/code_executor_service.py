@@ -1067,13 +1067,32 @@ def _build_structured_payload(
         raise ValueError(f"Unsupported language: {language}")
 
 
-def _execute_in_sandbox(script: str) -> SandboxResponse:
+# Compiled languages need extra headroom beyond the configured baseline
+# to account for compilation (and, for Java, JVM startup) on top of the
+# actual algorithm runtime the baseline is meant to cover. Interpreted
+# languages (python3, javascript) don't get any extra time.
+_COMPILE_OVERHEAD_SECONDS = {
+    "java": 8.0,
+    "cpp": 5.0,
+    "c": 5.0,
+}
+
+# The sandbox-executor service enforces its own hard ceiling on
+# timeoutSeconds (see executor/app/main.py) — anything above this gets
+# rejected outright, so we must clamp to it regardless of language.
+_SANDBOX_EXECUTOR_MAX_TIMEOUT_SECONDS = 10.0
+
+
+def _execute_in_sandbox(script: str, language: str) -> SandboxResponse:
     settings = get_settings()
     token = settings.sandbox_executor_token
     if not settings.sandbox_executor_url or not token:
         raise RuntimeError("Sandbox executor is not configured")
 
-    timeout = settings.sandbox_timeout_seconds
+    base_timeout = settings.sandbox_timeout_seconds
+    overhead = _COMPILE_OVERHEAD_SECONDS.get(language, 0.0)
+    timeout = min(base_timeout + overhead, _SANDBOX_EXECUTOR_MAX_TIMEOUT_SECONDS)
+
     with httpx.Client(timeout=timeout + 5.0) as client:
         response = client.post(
             f"{settings.sandbox_executor_url.rstrip('/')}/execute",
@@ -1094,7 +1113,7 @@ def run_code(problem_id: str, user_code: str, language: str = "python3") -> Exec
     script = json.dumps(payload)
 
     try:
-        sandbox = _execute_in_sandbox(script)
+        sandbox = _execute_in_sandbox(script, language)
     except (httpx.HTTPError, RuntimeError, ValidationError):
         return _error_result(
             "RUNTIME_ERROR",
