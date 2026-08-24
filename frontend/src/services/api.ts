@@ -280,6 +280,45 @@ api.getCodingSubmissions = (problemId?: string) =>
     `/api/coding/submissions${problemId ? `?problem_id=${problemId}` : ""}`
   );
 
+  // Uploads a resume file (PDF/DOCX) and returns its extracted plain text.
+// Uses FormData directly (not the generic `api()` helper) because file
+// uploads must NOT set a manual Content-Type header — the browser sets
+// the correct multipart boundary automatically.
+api.extractResumeText = async (file: File): Promise<{ resume_text: string }> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/ai-interviews/resume/extract`, {
+    method: "POST",
+    headers: {
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("user_role");
+      supabase.auth.signOut().catch(() => {});
+      window.location.href = "/login";
+      throw new Error("Session expired. Please log in again.");
+    }
+    let message = `Request failed: ${response.status}`;
+    try {
+      const errorBody = await response.json();
+      message = errorBody?.detail || message;
+    } catch {
+      // response wasn't JSON, fall back to the generic message
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+};
+
 // AI Interview Methods
 api.createInterviewSession = (payload: {
   mode: "jd_based" | "custom";

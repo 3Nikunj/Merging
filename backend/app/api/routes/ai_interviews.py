@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from typing import Annotated, List
 import json
@@ -19,11 +19,22 @@ from app.schemas.ai_interview import (
     AiInterviewSummaryResponse
 )
 from app.services.ai_interview_service import ai_interview_service
+from app.services.resume_extraction_service import extract_resume_text
 
 router = APIRouter()
 AuthenticatedUserId = Annotated[str, Depends(get_current_user_id)]
 RoleAuth = [Depends(require_role(["student", "admin"]))]
 
+@router.post("/resume/extract", dependencies=RoleAuth)
+async def extract_resume(
+    current_user_id: AuthenticatedUserId,
+    file: UploadFile = File(...),
+):
+    """Extract plain text from an uploaded PDF/DOCX resume file."""
+    text = await extract_resume_text(file)
+    return {"resume_text": text}
+
+    
 @router.post("", response_model=AiInterviewSessionResponse, status_code=201, dependencies=RoleAuth)
 def create_session(
     payload: AiInterviewSessionCreate,

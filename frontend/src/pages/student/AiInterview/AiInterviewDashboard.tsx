@@ -36,9 +36,10 @@ function AiInterviewDashboard() {
   const [resumeText, setResumeText] = useState("");
   const [voiceAccent, setVoiceAccent] = useState("af_heart");
   
-  // File upload simulation
+    // Resume file upload state
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [extractingResume, setExtractingResume] = useState(false);
+  const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -60,21 +61,41 @@ function AiInterviewDashboard() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFileName(file.name);
-      setExtractingResume(true);
-      
-      // Simulate text extraction
-      setTimeout(() => {
-        setResumeText(
-          `Candidate Profile extracted from ${file.name}.\n` +
-          `Primary skills: React, TypeScript, Python, Node.js.\n` +
-          `Experience: 3 years building web applications.`
-        );
-        setExtractingResume(false);
-      }, 1000);
+    if (!file) return;
+
+    setResumeUploadError(null);
+
+    // Basic client-side validation, mirrors the backend's own checks
+    const allowedExtensions = ["pdf", "docx"];
+    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    if (!allowedExtensions.includes(extension)) {
+      setResumeUploadError("Only PDF and DOCX files are supported.");
+      e.target.value = "";
+      return;
+    }
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSizeBytes) {
+      setResumeUploadError("File is too large. Maximum allowed size is 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setUploadedFileName(file.name);
+    setExtractingResume(true);
+
+    try {
+      const result = await api.extractResumeText(file);
+      setResumeText(result.resume_text);
+    } catch (err) {
+      console.error("Resume extraction failed", err);
+      setResumeUploadError(
+        err instanceof Error ? err.message : "Could not read this file. Please try again."
+      );
+      setUploadedFileName(null);
+    } finally {
+      setExtractingResume(false);
     }
   };
 
@@ -351,6 +372,11 @@ function AiInterviewDashboard() {
                       {extractingResume && (
                         <p className="text-[10px] text-practice-amberDark font-bold mt-2 animate-pulse">
                           Extracting resume content details...
+                        </p>
+                      )}
+                      {resumeUploadError && (
+                        <p className="text-[10px] text-red-600 font-bold mt-2">
+                          {resumeUploadError}
                         </p>
                       )}
                     </div>

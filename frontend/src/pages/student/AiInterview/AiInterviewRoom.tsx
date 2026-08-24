@@ -11,6 +11,7 @@ import {
   Send,
   Video,
   VideoOff,
+  AlertTriangle,
 } from "lucide-react";
 
 // Inline styles for glowing AI animations
@@ -65,7 +66,7 @@ function AiInterviewRoom() {
   const [voiceAccent, setVoiceAccent] = useState("af_heart");
   
   // Media Devices States
-  const [micActive, setMicActive] = useState(false);
+  const [micActive, setMicActive] = useState(true);
   const [cameraActive, setCameraActive] = useState(true);
   
   // Refs
@@ -77,6 +78,9 @@ function AiInterviewRoom() {
   const startedRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
   const sentenceBufferRef = useRef<string>("");
+  const accumulatedTranscriptRef = useRef<string>("");
+  const silenceTimerRef = useRef<any>(null);
+  const noSpeechCountRef = useRef(0);
   
   // Live Voice volume indicators
   const [inputVolume, setInputVolume] = useState<number[]>(Array(10).fill(2));
@@ -85,6 +89,7 @@ function AiInterviewRoom() {
   const [liveTranscription, setLiveTranscription] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [noSpeechWarning, setNoSpeechWarning] = useState(false);
 
   // Initialize Timer
   useEffect(() => {
@@ -306,15 +311,31 @@ function AiInterviewRoom() {
   };
 
   // Speech-To-Text (STT) listeners
-  const startSpeechRecognition = () => {
+  // How long to wait, after a natural pause is detected, before treating
+  // the answer as finished. If the candidate starts talking again inside
+  // this window, the wait is cancelled and listening simply continues.
+  // NOTE: we deliberately do NOT use rec.continuous = true — Chrome's
+  // continuous mode is unreliable and can silently stop delivering
+  // results. Each short recognition session ends naturally on a pause,
+  // restarts immediately, and this grace timer decides whether the
+  // candidate is actually done or just thinking.
+  const SILENCE_TIMEOUT_MS = 3000;
+
+  const startSpeechRecognition = (isContinuation: boolean = false) => {
     if (recognitionRef.current) return;
-    
+
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      
+
     if (!SpeechRecognition) {
       console.warn("Speech recognition is not supported in this browser.");
       return;
+    }
+
+    if (!isContinuation) {
+      accumulatedTranscriptRef.current = "";
+      noSpeechCountRef.current = 0;
+      setNoSpeechWarning(false);
     }
 
     const rec = new SpeechRecognition();
@@ -325,6 +346,12 @@ function AiInterviewRoom() {
     rec.onstart = () => {
       setIsSpeaking(true);
       setMicError(null);
+      // A new session starting means the candidate is actively talking
+      // again — cancel any pending auto-submit from a previous pause.
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       // Simulate input volume level fluctuations
       speechVolumeIntervalRef.current = setInterval(() => {
         setInputVolume(Array.from({ length: 10 }, () => Math.floor(Math.random() * 28) + 4));
@@ -332,11 +359,16 @@ function AiInterviewRoom() {
     };
 
     rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results)
+      const sessionTranscript = Array.from(e.results)
         .map((result: any) => result[0])
         .map((result) => result.transcript)
         .join("");
-      setLiveTranscription(transcript);
+      const fullTranscript = `${accumulatedTranscriptRef.current} ${sessionTranscript}`.trim();
+      setLiveTranscription(fullTranscript);
+
+      // Real speech was captured — clear any "can't hear you" warning.
+      noSpeechCountRef.current = 0;
+      setNoSpeechWarning(false);
     };
 
     rec.onend = () => {
@@ -345,29 +377,57 @@ function AiInterviewRoom() {
       if (speechVolumeIntervalRef.current) {
         clearInterval(speechVolumeIntervalRef.current);
       }
-      
-      // Auto-submit if transcript is meaningful, else restart listening
+      recognitionRef.current = null;
+
+      // If we're not supposed to be listening anymore (question submitted,
+      // mic muted, switched to text mode, etc.) don't restart or submit.
+      if (!(aiState === "listening" && micActive && !textModeActive)) {
+        return;
+      }
+
       setLiveTranscription((current) => {
+        accumulatedTranscriptRef.current = current;
+
         if (current.trim().length > 1) {
-          // Trigger submission
-          submitCandidateAnswer(current);
-          return current;
-        } else {
-          // Restart after short delay if active and mic is on
-          setTimeout(() => {
-            if (aiState === "listening" && micActive && !textModeActive) {
-              startSpeechRecognition();
-            }
-          }, 300);
-          return "";
+          // The candidate said something and then paused. Give them a
+          // grace period to keep going before treating the answer as
+          // final — listening resumes immediately below in the meantime.
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+          silenceTimerRef.current = setTimeout(() => {
+            silenceTimerRef.current = null;
+            stopSpeechRecognition();
+            submitCandidateAnswer(current);
+          }, SILENCE_TIMEOUT_MS);
         }
+
+        // Seamlessly resume listening so the pause is invisible to the
+        // candidate — this is what lets them keep talking through a
+        // natural thinking pause without losing what they've said.
+        setTimeout(() => {
+          if (aiState === "listening" && micActive && !textModeActive) {
+            startSpeechRecognition(true);
+          }
+        }, 300);
+
+        return current;
       });
     };
 
     rec.onerror = (e: any) => {
       console.error("Speech Recognition Error", e);
-      // 'no-speech' and 'aborted' are transient silences. We let rec.onend handle restarting.
+      // 'no-speech' and 'aborted' are transient silences; onend handles restarting.
       if (e.error === "no-speech" || e.error === "aborted") {
+        if (e.error === "no-speech") {
+          // Repeated "nothing heard" cycles in a row means the mic likely
+          // isn't picking up any real audio — surface a visible warning
+          // instead of silently looping forever.
+          noSpeechCountRef.current += 1;
+          if (noSpeechCountRef.current >= 3) {
+            setNoSpeechWarning(true);
+          }
+        }
         return;
       }
       if (e.error === "not-allowed") {
@@ -379,12 +439,31 @@ function AiInterviewRoom() {
     };
 
     recognitionRef.current = rec;
-    rec.start();
+    // IMPORTANT: rec.start() can throw synchronously in some browsers
+    // (e.g. if a previous session hasn't fully torn down yet). Without
+    // this try/catch, an uncaught error here left recognitionRef.current
+    // permanently set, which silently blocked every future restart —
+    // the mic would look "on" but never actually listen again.
+    try {
+      rec.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      recognitionRef.current = null;
+      setTimeout(() => {
+        if (aiState === "listening" && micActive && !textModeActive) {
+          startSpeechRecognition(isContinuation);
+        }
+      }, 500);
+    }
   };
 
   const stopSpeechRecognition = () => {
     if (speechVolumeIntervalRef.current) {
       clearInterval(speechVolumeIntervalRef.current);
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
     setInputVolume(Array(10).fill(2));
     if (recognitionRef.current) {
@@ -410,6 +489,7 @@ function AiInterviewRoom() {
     setInterviewerMessage("Processing your answer...");
     setManualAnswer("");
     setLiveTranscription("");
+    accumulatedTranscriptRef.current = "";
     setQuestionCount((prev) => prev + 1);
 
     wsRef.current.send(JSON.stringify({
@@ -644,6 +724,12 @@ function AiInterviewRoom() {
               </div>
             ) : (
               <div className="space-y-2">
+                {noSpeechWarning && !micError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] font-semibold text-amber-300">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    We can't hear you. Check that your mic isn't muted, reduce background noise, or click "Type Answer Instead".
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className={`text-[10px] font-extrabold uppercase tracking-widest ${micError ? "text-red-400" : "text-white/55"}`}>
                     {micError ? "Microphone Error" : "Live Transcript preview"}
