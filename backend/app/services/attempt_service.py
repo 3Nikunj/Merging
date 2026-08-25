@@ -20,58 +20,44 @@ ANSWERS: dict[tuple[str, int], dict] = {}
 MOCK_ATTEMPT_QUESTIONS: dict[tuple[str, int], dict] = {}
 
 
+from app.repositories.base import BaseAttemptRepository
+
 class AttemptService:
+    def __init__(self, repository: BaseAttemptRepository | None = None):
+        from app.repositories.attempt_repository import SupabaseAttemptRepository
+        self.repository = repository or SupabaseAttemptRepository()
+
     def start_attempt(
         self,
         payload: StartAttemptRequest,
         user_id: str,
     ) -> TestAttempt:
         client = get_supabase_client()
-
-        if client:
+        if client and self.repository:
             try:
-                test_rows = client.table("tests").select("id,subject_id,topic_id").eq("id", payload.testId).limit(1).execute().data or []
-                if not test_rows:
+                test = self.repository.get_test_by_id(payload.testId)
+                if not test:
                     raise HTTPException(status_code=404, detail="Requested practice test not found.")
                 
-                test = test_rows[0]
                 test_id = test["id"]
 
                 # Check if there are any published questions for this test
-                questions_check = (
-                    client.table("questions")
-                    .select("id")
-                    .eq("subject_id", test["subject_id"])
-                    .eq("topic_id", test["topic_id"])
-                    .eq("status", "published")
-                    .limit(1)
-                    .execute()
-                )
-                if not questions_check.data:
+                has_questions = self.repository.check_published_questions_exist(test["subject_id"], test["topic_id"])
+                if not has_questions:
                     raise HTTPException(
                         status_code=400,
                         detail="This practice test does not have any published questions yet. Please select another topic."
                     )
 
-                response = (
-                    client.table("test_attempts")
-                    .insert(
-                        {
-                            "user_id": user_id,
-                            "test_id": test_id,
-                            "status": "in_progress",
-                        }
-                    )
-                    .execute()
-                )
-                row = response.data[0]
+                row = self.repository.create_attempt(user_id, test_id)
                 return TestAttempt.model_validate(self._map_attempt(row, answered_count=0))
             except HTTPException:
                 raise
-            except (APIError, IndexError, ValueError) as e:
+            except Exception as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
         return self._start_mock_attempt(payload, user_id)
+
 
 
     def _determine_target_difficulty(self, answers_by_num: list[dict]) -> str:

@@ -34,6 +34,7 @@ class ClientSuppliedIdentityTests(unittest.TestCase):
             problem_id="problem-id",
             user_code="print('safe')",
             user_id="authenticated-user",
+            language="python3",
         )
 
     def test_legacy_submission_history_rejects_foreign_user(self) -> None:
