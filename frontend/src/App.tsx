@@ -1,4 +1,6 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { supabase } from "./services/supabase";
 import RouteGuard from "./components/shared/RouteGuard";
 import AdminLayout from "./components/admin/AdminLayout";
 
@@ -39,6 +41,20 @@ function RootRedirect() {
 }
 
 function App() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate("/reset-password");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
