@@ -59,11 +59,6 @@ class AnalyticsService:
             except Exception:
                 pass
 
-        if not recommendations_list:
-            # Fallback to default mock recommendations
-            from app.services.mock_data import RECOMMENDATIONS
-            recommendations_list = [Recommendation.model_validate(item) for item in RECOMMENDATIONS]
-
         return RecommendationsResponse(recommendations=recommendations_list)
 
     def get_weak_areas(self, user_id: str) -> WeakAreasResponse:
@@ -91,27 +86,22 @@ class AnalyticsService:
             except Exception:
                 pass
 
-        if not weak_areas_list:
-            # Fallback to default mock weak areas if no attempts exist or query fails
-            from app.services.mock_data import WEAK_AREAS
-            weak_areas_list = [WeakArea.model_validate(item) for item in WEAK_AREAS]
-
         return WeakAreasResponse(weak_areas=weak_areas_list)
 
     def get_dashboard_stats(self, user_id: str) -> DashboardStatsResponse:
-        # Default mock values representing a healthy student state
-        avg_test_score = 78.5
-        tests_completed = 14
-        coding_success_rate = 68.2
-        coding_total_submissions = 22
-        interview_average_score = 8.2
-        interview_completed_count = 4
+        # Real initial stats for a new student should start at zero
+        avg_test_score = 0.0
+        tests_completed = 0
+        coding_success_rate = 0.0
+        coding_total_submissions = 0
+        interview_average_score = 0.0
+        interview_completed_count = 0
 
         subject_mastery = {
-            "aptitude": 75.0,
-            "reasoning": 40.0,
-            "verbal": 85.0,
-            "coding": 55.0
+            "aptitude": 0.0,
+            "reasoning": 0.0,
+            "verbal": 0.0,
+            "coding": 0.0
         }
 
         client = get_supabase_client()

@@ -5,6 +5,7 @@ import AdminLayout from "./components/admin/AdminLayout";
 // Shared Pages
 import Login from "./pages/shared/Login";
 import Unauthorized from "./pages/shared/Unauthorized";
+import ResetPassword from "./pages/shared/ResetPassword";
 
 // Student Pages
 import CodingArenaPage from "./pages/student/CodingArena/CodingArenaPage";
@@ -42,6 +43,7 @@ function App() {
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* Student Guarded Routes */}

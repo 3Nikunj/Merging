@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { codingProblems } from "../../../data/codingProblems";
 import Sidebar from "../../../components/student/layout/Sidebar";
 import { api, type RunCodeResponse } from "../../../services/api";
+import { executeJavaScriptLocal, executePythonLocal } from "../../../utils/localExecutor";
 
 type RunStatus = RunCodeResponse["status"] | "idle" | "running" | "submitting";
 type ConsoleTab = "Testcase" | "Result" | "Submissions";
@@ -114,6 +115,20 @@ function CodingArenaPage() {
   const runCode = async () => {
     setRunStatus("running");
     setActiveTab("Result");
+
+    // Client-side local execution offload to achieve $0 cost scaling
+    if (selectedLanguage === "javascript" || selectedLanguage === "python3") {
+      try {
+        const executor = selectedLanguage === "javascript" ? executeJavaScriptLocal : executePythonLocal;
+        const result = await executor(codes[selectedLanguage] || "", codingProblem.id);
+        setRunResult(result);
+        setRunStatus(result.status);
+        return;
+      } catch (err) {
+        console.warn("Local execution failed, falling back to server run.", err);
+      }
+    }
+
     try {
       const result = await api.runCode(codingProblem.id, codes[selectedLanguage] || "", selectedLanguage);
       setRunResult(result);

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import threading
 from typing import Literal, TypedDict
 
 import httpx
@@ -11,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.config import get_settings
 from app.core.supabase import get_supabase_client
+
+_sandbox_semaphore = None
+_sandbox_semaphore_lock = threading.Lock()
 
 PROBLEM_TESTS: dict[str, list[dict[str, str]]] = {
     "001": [
@@ -123,8 +127,25 @@ def run_code(problem_id: str, user_code: str, language: str = "python3") -> Exec
     payload = _build_structured_payload(problem_id, user_code, language, marker)
     script = json.dumps(payload)
 
+    # Initialize BoundedSemaphore on demand
+    global _sandbox_semaphore
+    if _sandbox_semaphore is None:
+        with _sandbox_semaphore_lock:
+            if _sandbox_semaphore is None:
+                settings = get_settings()
+                # Get max concurrent executions (default to 4)
+                max_concurrent = getattr(settings, "sandbox_max_concurrent", 4)
+                # Parse if it's a string, float, or int
+                try:
+                    max_concurrent = int(float(str(max_concurrent)))
+                except ValueError:
+                    max_concurrent = 4
+                max_concurrent = max(1, max_concurrent)
+                _sandbox_semaphore = threading.BoundedSemaphore(max_concurrent)
+
     try:
-        sandbox = _execute_in_sandbox(script)
+        with _sandbox_semaphore:
+            sandbox = _execute_in_sandbox(script)
     except (httpx.HTTPError, RuntimeError, ValidationError):
         return _error_result(
             "RUNTIME_ERROR",

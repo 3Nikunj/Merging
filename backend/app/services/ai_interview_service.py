@@ -26,78 +26,113 @@ class AiInterviewService:
         self.client = get_supabase_client()
         self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
 
-    def _get_api_key(self) -> str | None:
+    def _get_api_keys(self) -> list[str]:
         key = self.settings.groq_api_key
-        return key.get_secret_value() if key else None
+        if not key:
+            return []
+        raw_keys = key.get_secret_value()
+        return [k.strip() for k in raw_keys.split(",") if k.strip()]
+
+    def _get_api_key(self) -> str | None:
+        keys = self._get_api_keys()
+        return keys[0] if keys else None
 
     async def _call_groq_stream(self, messages: list[dict]) -> AsyncGenerator[str, None]:
-        api_key = self._get_api_key()
-        if not api_key:
+        keys_list = self._get_api_keys()
+        if not keys_list:
             raise RuntimeError("Groq API key not configured")
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": "openai/gpt-oss-120b",
-            "messages": messages,
-            "temperature": 0.3,
-            "stream": True
-        }
+        max_attempts = len(keys_list)
+        for attempt in range(max_attempts):
+            if not hasattr(self, "_key_index"):
+                self._key_index = 0
+            api_key = keys_list[self._key_index % len(keys_list)]
+            self._key_index += 1
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream("POST", self.groq_url, headers=headers, json=payload) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if not line.strip():
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "openai/gpt-oss-120b",
+                "messages": messages,
+                "temperature": 0.3,
+                "stream": True
+            }
+
+            success = False
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with client.stream("POST", self.groq_url, headers=headers, json=payload) as response:
+                        if response.status_code == 429 and attempt < max_attempts - 1:
+                            logger.warning("Groq API stream rate limited (429), trying next key...")
                             continue
-                        if line.startswith("data: "):
-                            data_str = line[6:].strip()
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                data = json.loads(data_str)
-                                content = data["choices"][0]["delta"].get("content", "")
-                                if content:
-                                    yield content
-                            except Exception:
+                        response.raise_for_status()
+                        success = True
+                        async for line in response.aiter_lines():
+                            if not line.strip():
                                 continue
-        except Exception as e:
-            logger.error(f"Error calling Groq API stream: {e}")
-            raise
+                            if line.startswith("data: "):
+                                data_str = line[6:].strip()
+                                if data_str == "[DONE]":
+                                    break
+                                try:
+                                    data = json.loads(data_str)
+                                    content = data["choices"][0]["delta"].get("content", "")
+                                    if content:
+                                        yield content
+                                except Exception:
+                                    continue
+                if success:
+                    break
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"Groq API stream call error: {e}. Trying next key...")
+                    continue
+                logger.error(f"Error calling Groq API stream: {e}")
+                raise
 
     def _call_groq(self, messages: list[dict], response_format_json: bool = True) -> str:
-        api_key = self._get_api_key()
-        if not api_key:
+        keys_list = self._get_api_keys()
+        if not keys_list:
             raise RuntimeError("Groq API key not configured")
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        # Use openai/gpt-oss-120b for high quality JSON outputs
-        # (llama-3.3-70b-versatile was deprecated by Groq on 2026-06-17)
-        payload = {
-            "model": "openai/gpt-oss-120b",
-            "messages": messages,
-            "temperature": 0.3,
-        }
-        if response_format_json:
-            payload["response_format"] = {"type": "json_object"}
+        max_attempts = len(keys_list)
+        for attempt in range(max_attempts):
+            if not hasattr(self, "_key_index"):
+                self._key_index = 0
+            api_key = keys_list[self._key_index % len(keys_list)]
+            self._key_index += 1
 
-        try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(self.groq_url, headers=headers, json=payload)
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.error(f"Error calling Groq API: {e}")
-            raise HTTPException(status_code=502, detail="Failed to communicate with AI service")
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": "openai/gpt-oss-120b",
+                "messages": messages,
+                "temperature": 0.3,
+            }
+            if response_format_json:
+                payload["response_format"] = {"type": "json_object"}
+
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.post(self.groq_url, headers=headers, json=payload)
+                    if response.status_code == 429 and attempt < max_attempts - 1:
+                        logger.warning("Groq API rate limited (429), trying next key...")
+                        continue
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"Groq API call error: {e}. Trying next key...")
+                    continue
+                logger.error(f"Error calling Groq API: {e}")
+                raise HTTPException(status_code=502, detail="Failed to communicate with AI service")
 
     def create_session(self, payload: AiInterviewSessionCreate, student_id: str) -> AiInterviewSessionResponse:
         row = {
@@ -352,6 +387,19 @@ class AiInterviewService:
             "overall_score": overall_score,
             "completed_at": completed_at
         }).eq("id", session_id).execute()
+
+        # Send real-time notification
+        try:
+            company_name = session.get("company", "General")
+            role_name = session.get("job_title", "Software Engineer")
+            self.client.table("notifications").insert({
+                "user_id": student_id,
+                "title": "Mock Interview Graded",
+                "description": f"Your interview for {company_name} ({role_name}) is graded. Score: {overall_score}/100.",
+                "type": "interview"
+              }).execute()
+        except Exception:
+            pass
 
         def get_val(d, keys, default):
             for k in keys:

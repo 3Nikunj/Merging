@@ -61,10 +61,22 @@ During this session, we migrated speech synthesis to a browser-native execution 
 * **JWT Attachment**: Updated the `api()` fetch wrapper to attach `Authorization: Bearer <token>` from `supabase.auth.getSession()` on every request.
 * **401 Interceptor**: Added global 401 handler that clears local storage, signs out of Supabase, and redirects to `/login`.
 
+### 9. Student Dashboard Refinements, Real-Time Notifications, & $0 Production Scaling (2026-08-26)
+* **Dashboard Polish**: Implemented clean dashboard metrics for new students (0 stats, empty weak areas), search filtering/navigation in Topbar, settings redirection, and a secure Sign Out action in Sidebar.
+* **Real-Time Supabase Sync**: Added a `notifications` table, RLS isolation policies, and realtime replication. Wired frontend WebSocket listeners in Topbar and backend notification insertion triggers on submit events.
+* **$0 Production Scaling (1000 Users)**: Configured pgBouncer connection transaction multiplexing, dynamic Uvicorn ASGI workers based on nproc core counts, Groq API key-rotation pooling, thread-safe sandbox execution queueing, and offloaded trial code runs to browser WebAssembly (Pyodide) and JS eval.
+
+### 10. Code Editor & Language Drivers Modularization & Frontend API Restructuring (2026-08-25)
+* **Sandbox Refactoring**: Modularized code compilation routines by introducing base driver contracts and individual driver modules for Python, JavaScript, Java, C++, and C in the backend.
+* **Repository Pattern Decoupling**: Separated Supabase database execution calls from standard practice test service flows, introducing attempt interface repositories to support cleaner mocking.
+* **Frontend Restructuring**: Restructured monolithic API routes by splitting axios-like interceptors, user authentication, test attempts, coding compiler connections, and interview feedback services into organized submodules.
+
 ---
 
 ## 📄 Detailed Changelogs & Documentation
 
+- [2026-08-26 Session Changelog](./changelog_2026_08_26.md): Polish dashboard features, real-time user notification systems, and zero-cost scaling (pgBouncer routing, worker scaling, Groq rotation pool, thread-safe BoundedSemaphore, and browser WASM execution).
+- [2026-08-25 Session Changelog](./changelog_2026_08_25.md): Code execution sandbox modularization, database repository separation, and frontend API restructuring.
 - [Student Assessment & Seeding](./student_features_and_seeding.md): Company Simulation modules, standard Live Test engine structure, and PostgreSQL database seeding/inspector scripts.
 - [Production Deployment Strategy](./deployment_strategy.md): Recommended VPC network architecture, hosting providers, scaling rules, and secure sandbox configurations.
 - [2026-08-24 Session Changelog](./changelog_2026_08_24.md): PDF results downloading, view question explanation modals, real resume text extraction services, speech pause grace periods, and coding sandbox authentication checks.

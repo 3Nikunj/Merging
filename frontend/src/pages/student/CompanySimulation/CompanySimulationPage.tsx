@@ -214,6 +214,18 @@ export default function CompanySimulationPage() {
   const [dbQuestions, setDbQuestions] = useState<SimulationQuestion[] | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>(COMPANIES[0]);
   const [activeSimulatorRound, setActiveSimulatorRound] = useState<Round | null>(null);
+
+  // Pre-select company from URL query parameter if present
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const companyId = params.get("company_id");
+    if (companyId) {
+      const found = COMPANIES.find((c) => c.id === companyId);
+      if (found) {
+        setSelectedCompany(found);
+      }
+    }
+  }, []);
   
   // Simulator State
   const [simLoading, setSimLoading] = useState(false);

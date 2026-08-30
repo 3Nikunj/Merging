@@ -7,9 +7,11 @@ import {
   Sparkles,
   Trophy,
   User,
+  LogOut,
 } from "lucide-react";
 import type { JSX } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../../../services/supabase";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard" },
@@ -33,6 +35,17 @@ const icons: Record<string, JSX.Element> = {
 
 function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Error signing out", err);
+    }
+    localStorage.removeItem("user_role");
+    navigate("/login");
+  };
 
   return (
     <aside className="hidden h-screen w-[280px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-practice-sidebar text-white lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:flex">
@@ -77,10 +90,18 @@ function Sidebar() {
           ))}
         </nav>
 
-        <div className="mt-auto pt-8">
+        <div className="mt-auto pt-8 space-y-3">
           <button className="flex w-full items-center justify-center gap-2 rounded bg-practice-amber px-4 py-3 text-sm font-extrabold text-practice-amberDark transition-all duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-sidebar">
             <Sparkles className="h-4 w-4" aria-hidden="true" />
             Upgrade to Pro
+          </button>
+          
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center justify-center gap-2 rounded border border-white/20 bg-white/5 px-4 py-3 text-sm font-extrabold text-white transition-all duration-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-practice-amber focus-visible:ring-offset-2 focus-visible:ring-offset-practice-sidebar"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            Sign Out
           </button>
         </div>
       </div>

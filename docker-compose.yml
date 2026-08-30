@@ -4,6 +4,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: aivalytics-unified-backend
+    command: sh -c "workers=$$(nproc); if [ $$workers -lt 2 ]; then workers=2; fi; exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $$workers --no-server-header"
     env_file:
       - .env
     ports:

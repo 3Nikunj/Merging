@@ -350,6 +350,23 @@ class AttemptService:
                     .eq("user_id", user_id)
                     .execute()
                 )
+
+                # Send real-time notification
+                try:
+                    test_title = "Practice Test"
+                    attempt_data = client.table("test_attempts").select("tests(title)").eq("id", attempt_id).execute()
+                    if attempt_data.data and attempt_data.data[0].get("tests"):
+                        test_title = attempt_data.data[0]["tests"]["title"]
+
+                    client.table("notifications").insert({
+                        "user_id": user_id,
+                        "title": "Practice Test Completed",
+                        "description": f"You completed '{test_title}' with a score of {result.overall_score}%.",
+                        "type": "test"
+                    }).execute()
+                except Exception:
+                    pass
+
                 return SubmitAttemptResponse(
                     attempt_id=attempt_id,
                     status="SUBMITTED",
